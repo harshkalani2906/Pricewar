@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price War</title>
+<style>
+  :root {
+    --bg: #ffffff; --text: #1f2328; --muted: #6b7280; --line: #e5e7eb; --head: #f6f7f9;
+    --low-bg: #fde2e1; --low-tx: #a4161a; --high-bg: #fff0cc; --high-tx: #8a5a00;
+    --oos-tx: #9ca3af; --btn: #1f2328; --btn-tx: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --text: #e8eaed; --muted: #9aa0a6; --line: #2c2f35; --head: #1e2126;
+      --low-bg: #4a1f22; --low-tx: #ffb3b0; --high-bg: #44360f; --high-tx: #ffd77a;
+      --oos-tx: #6b7280; --btn: #e8eaed; --btn-tx: #16181c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 64px; height: 48px; flex: none; }
+  .brand .nh { height: 54px; width: auto; flex: none; }
+  .brand .sep { width: 1px; height: 40px; background: var(--line); margin: 0 4px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+  h1 small { display: block; font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .meta { color: var(--muted); font-size: 13px; flex: 1 1 220px; min-width: 0; }
+  .right { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  button { background: var(--btn); color: var(--btn-tx); border: 0; border-radius: 6px;
+           padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 0 20px 12px; font-size: 13px; color: var(--muted); }
+  .filters label { display: inline-flex; align-items: center; gap: 8px; }
+  .filters select, .filters input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                                    border-radius: 6px; padding: 6px 10px; min-width: 190px; }
+  .filters .clear { background: none; color: var(--muted); border: 1px solid var(--line); font-weight: 500; padding: 6px 12px; }
+  td.cat { color: var(--muted); text-align: left; }
+  .wrap { overflow: auto; max-height: calc(100vh - 175px); border-top: 1px solid var(--line); }
+  table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--head); font-weight: 600; z-index: 2; }
+  th:first-child, td:first-child { position: sticky; left: 0; text-align: left; background: var(--bg); z-index: 1; }
+  th:first-child { background: var(--head); z-index: 3; }
+  td:first-child { font-weight: 600; }
+  td.al { color: var(--muted); }
+  td.low { background: var(--low-bg); color: var(--low-tx); font-weight: 600; }
+  td.high { background: var(--high-bg); color: var(--high-tx); font-weight: 600; }
+  td.oos { color: var(--oos-tx); }
+  td.none { color: var(--oos-tx); }
+  td.cnt { font-weight: 600; }
+  tr:hover td { filter: brightness(0.97); }
+  th.logo { text-align: center; padding: 6px 12px; }
+  .lg { position: relative; display: inline-block; width: 30px; height: 30px; vertical-align: middle; }
+  .lg img { width: 30px; height: 30px; border-radius: 7px; object-fit: contain; background: #fff;
+            box-shadow: 0 0 0 1px var(--line); }
+  .lg .bolt { position: absolute; right: -7px; bottom: -5px; width: 16px; height: 16px; border-radius: 50%;
+              background: #ffd23f; color: #1f2328; font-size: 10px; line-height: 16px; text-align: center;
+              box-shadow: 0 0 0 2px var(--head); }
+  .tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .tab { background: none; color: var(--muted); border-radius: 0; padding: 10px 14px; font-weight: 600;
+         border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: var(--text); border-bottom-color: var(--text); }
+  .qconly { display: none !important; }
+  body.qcview .qconly { display: inline-flex !important; }
+  th.lft { text-align: left; }
+  thead tr.r2 th { top: 43px; font-weight: 500; font-size: 12px; color: var(--muted); }
+  th.gl, td.gl { border-left: 2px solid var(--line); }
+  th[rowspan] { vertical-align: middle; }
+  .seg { display: inline-flex; align-items: center; }
+  .seg .sg { background: var(--bg); color: var(--muted); border: 1px solid var(--line); border-radius: 0; padding: 6px 12px; font-weight: 600; }
+  .seg .sg:first-of-type { border-radius: 6px 0 0 6px; margin-left: 8px; }
+  .seg .sg:last-of-type { border-radius: 0 6px 6px 0; border-left: 0; }
+  .seg .sg.on { background: var(--btn); color: var(--btn-tx); border-color: var(--btn); }
+  .rk { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 6px; margin-left: 4px; }
+  .rk.t50 { color: #1a7f37; border-color: #9fd5ae; }
+</style>
+</head>
+<body>
+<header>
+<div class="brand">
+    <img class="nh" src="data:image/png;base64,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" alt="Nat Habit">
+    <span class="sep"></span>
+    <svg viewBox="0 0 100 76" aria-hidden="true" id="katanas">
+      <defs><linearGradient id="blade" x1="0" x2="1"><stop offset="0" stop-color="#9aa3ad"/><stop offset="0.5" stop-color="#eef1f4"/><stop offset="1" stop-color="#b9c0c8"/></linearGradient></defs>
+      <g transform="translate(22,62)"><g>
+        <animateTransform attributeName="transform" type="rotate" dur="2.4s" repeatCount="indefinite"
+          values="10;10;38;31;10" keyTimes="0;0.35;0.5;0.62;1" calcMode="spline"
+          keySplines="0 0 1 1;0.6 0 1 1;0 0 0.4 1;0.4 0 0.2 1"/>
+        <g>
+      <path d="M-1.6 -12 Q-3.6 -44 1.2 -74 L3.2 -66 Q1.4 -42 1.8 -12 Z" fill="url(#blade)" stroke="#8a929c" stroke-width="0.5"/>
+      <path d="M1.2 -74 L3.2 -66 Q1.4 -42 1.8 -12 L1 -12 Q0.6 -42 2.3 -67 Z" fill="#ffffff" opacity="0.7"/>
+      <ellipse cx="0" cy="-11" rx="6.5" ry="2.2" fill="#b8860b" stroke="#7a5a08" stroke-width="0.5"/>
+      <rect x="-2.3" y="-9" width="4.6" height="24" rx="1.4" fill="#1d1d1f"/>
+      <path d="M-2.3 -6 L2.3 -2 M2.3 -6 L-2.3 -2 M-2.3 0 L2.3 4 M2.3 0 L-2.3 4 M-2.3 6 L2.3 10 M2.3 6 L-2.3 10" stroke="#b3121b" stroke-width="1.1"/>
+      <rect x="-2.8" y="14.5" width="5.6" height="2.6" rx="1" fill="#b8860b"/>
+    </g>
+      </g></g>
+      <g transform="translate(78,62) scale(-1,1)"><g>
+        <animateTransform attributeName="transform" type="rotate" dur="2.4s" repeatCount="indefinite"
+          values="10;10;38;31;10" keyTimes="0;0.35;0.5;0.62;1" calcMode="spline"
+          keySplines="0 0 1 1;0.6 0 1 1;0 0 0.4 1;0.4 0 0.2 1"/>
+        <g>
+      <path d="M-1.6 -12 Q-3.6 -44 1.2 -74 L3.2 -66 Q1.4 -42 1.8 -12 Z" fill="url(#blade)" stroke="#8a929c" stroke-width="0.5"/>
+      <path d="M1.2 -74 L3.2 -66 Q1.4 -42 1.8 -12 L1 -12 Q0.6 -42 2.3 -67 Z" fill="#ffffff" opacity="0.7"/>
+      <ellipse cx="0" cy="-11" rx="6.5" ry="2.2" fill="#b8860b" stroke="#7a5a08" stroke-width="0.5"/>
+      <rect x="-2.3" y="-9" width="4.6" height="24" rx="1.4" fill="#1d1d1f"/>
+      <path d="M-2.3 -6 L2.3 -2 M2.3 -6 L-2.3 -2 M-2.3 0 L2.3 4 M2.3 0 L-2.3 4 M-2.3 6 L2.3 10 M2.3 6 L-2.3 10" stroke="#b3121b" stroke-width="1.1"/>
+      <rect x="-2.8" y="14.5" width="5.6" height="2.6" rx="1" fill="#b8860b"/>
+    </g>
+      </g></g>
+      <g transform="translate(50,22)" opacity="0">
+        <animate attributeName="opacity" dur="2.4s" repeatCount="indefinite" values="0;0;1;0;0" keyTimes="0;0.48;0.5;0.6;1"/>
+        <path d="M0 -11 L2 -2 L11 0 L2 2 L0 11 L-2 2 L-11 0 L-2 -2 Z" fill="#ffd23f"/>
+        <circle r="2.6" fill="#ffffff"/>
+      </g>
+    </svg>
+    <h1>Price War<small>Nat Habit price parity across 10 channels</small></h1>
+  </div>
+  <div class="meta" id="meta"></div>
+  <div class="right">
+  <div class="legend">
+    <span><i class="sw" style="background:var(--low-bg)"></i>Below aligned</span>
+    <span><i class="sw" style="background:var(--high-bg)"></i>Above aligned</span>
+    <span style="color:var(--oos-tx)">OOS = out of stock</span>
+  </div>
+  <button id="dl">Download data</button>
+  </div>
+</header>
+<nav class="tabs">
+  <button class="tab on" data-v="all">All channels</button>
+  <button class="tab" data-v="qc">Quick commerce &middot; city wise</button>
+</nav>
+<div class="filters">
+  <span class="seg" title="Which aligned price the colours compare against">Compare with
+    <button class="sg on" data-m="event">Event aligned</button><button class="sg" data-m="bau">BAU aligned</button></span>
+  <label>SKUs <select id="fpri"><option value="80">80% revenue SKUs</option><option value="50">Top 50 revenue</option><option value="all">All SKUs</option></select></label>
+  <label>Category <select id="fcat"><option value="">All categories</option></select></label>
+  <label>NH SKU <input id="fsku" list="skulist" placeholder="Type or pick an NH SKU"></label>
+  <datalist id="skulist"></datalist>
+  <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
+  <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
+  <button class="clear" id="fclear">Clear</button>
+  <span id="count"></span>
+</div>
+<div class="wrap"><table id="t"></table></div>
+<script>
+const DATA = /*__DATA__*/null;
+let VIEW = "all", MODE = "event";
+const TOL = (DATA && DATA.tol != null) ? DATA.tol : 1;
+const $ = id => document.getElementById(id);
+const R0 = v => v == null || v === "" ? "" : Math.round(v);
+const rs = v => v == null ? "" : "\u20B9" + Math.round(v);
+const AL = r => MODE === "bau" ? r.alb : r.ale;
+function stateOf(lo, hi, oos, al) {
+  if (oos) return "oos";
+  if (al == null) return "na";
+  if (lo < al - TOL) return "low";
+  if (hi > al + TOL) return "high";
+  return "ok";
+}
+const cellState = (r, c) => stateOf(c[0], c[1], c[2], AL(r));
+const qcState = (r, v) => stateOf(v[0], v[0], v[1], AL(r));
+const cellText = c => !c ? "\u2013" : (c[2] ? "OOS" : (R0(c[0]) === R0(c[1]) ? rs(c[0]) : rs(c[0]) + "\u2013" + R0(c[1])));
+const OFF = s => s === "low" || s === "high";
+const STATE = {low: "Below aligned", high: "Above aligned", oos: "Out of stock", ok: "At par", na: "No aligned price"};
+function esc(s) { return String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+function rkb(r) { return r.rank == null ? "" : ' <span class="rk' + (r.tier === "Top 50" ? " t50" : "") + '" title="October revenue rank">#' + r.rank + "</span>"; }
+function cls(st) { return st === "low" || st === "high" || st === "oos" ? st : ""; }
+function logoTh(c, extra) {
+  const L = DATA.logos || {};
+  if (!L[c]) return "<th" + extra + ">" + esc(c) + "</th>";
+  return '<th class="logo"' + extra + ' title="' + esc(c) + '"><span class="lg"><img src="' + L[c] + '" alt="' + esc(c) + '">' +
+         (c === "FK Minutes" ? '<span class="bolt">\u26A1</span>' : "") + "</span></th>";
+}
+
+// ---- columns of the current view: [{ch, pin, label}]
+function qcCols() {
+  const app = $("fapp").value, city = $("fcity").value, out = [];
+  (DATA.qcApps || []).filter(a => !app || a === app).forEach(a =>
+    (DATA.pins || []).filter(p => !city || p.pin === city).forEach(p => out.push({ch: a, pin: p.pin, label: p.city || p.pin})));
+  return out;
+}
+function qcBad(r, cols) { return cols.filter(c => { const v = (r.qc[c.ch] || {})[c.pin]; return v && OFF(qcState(r, v)); }).length; }
+function allBad(r) { return DATA.channels.filter(ch => r.cells[ch] && OFF(cellState(r, r.cells[ch]))).length; }
+
+function shown() {
+  const c = $("fcat").value, k = $("fsku").value.trim().toUpperCase(), pr = $("fpri").value;
+  const hasTier = DATA.rows.some(r => r.tier);
+  const inPri = r => !hasTier || pr === "all" || (pr === "50" ? r.tier === "Top 50" : (r.tier === "Top 50" || r.tier === "80% revenue"));
+  let rows = DATA.rows.filter(r => inPri(r) && (!c || r.cat === c) && (!k || r.sku.toUpperCase().includes(k)));
+  if (VIEW === "qc") {
+    const cols = qcCols();
+    rows = rows.filter(r => cols.some(x => (r.qc[x.ch] || {})[x.pin])).map(r => Object.assign({}, r, {bad: qcBad(r, cols)}));
+  } else {
+    rows = rows.map(r => Object.assign({}, r, {bad: allBad(r)}));
+  }
+  const rk = r => r.rank == null ? 99999 : r.rank;
+  return rows.sort((a, b) => b.bad - a.bad || (AL(a) == null) - (AL(b) == null) || rk(a) - rk(b) || a.sku.localeCompare(b.sku));
+}
+
+function setupFilters() {
+  if (!DATA || !DATA.rows.length) return;
+  const cats = [...new Set(DATA.rows.map(r => r.cat).filter(Boolean))].sort();
+  $("fcat").innerHTML += cats.map(c => "<option>" + esc(c) + "</option>").join("");
+  $("skulist").innerHTML = DATA.rows.map(r => '<option value="' + esc(r.sku) + '">').join("");
+  $("fapp").innerHTML += (DATA.qcApps || []).map(a => "<option>" + esc(a) + "</option>").join("");
+  $("fcity").innerHTML += (DATA.pins || []).map(p => '<option value="' + p.pin + '">' + esc((p.city || "") + " " + p.pin) + "</option>").join("");
+  ["fcat", "fapp", "fcity", "fpri"].forEach(id => $(id).onchange = render);
+  $("fsku").oninput = render;
+  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity"].forEach(id => $(id).value = ""); $("fpri").value = "80"; render(); };
+  document.querySelectorAll(".sg").forEach(b => b.onclick = () => {
+    MODE = b.dataset.m;
+    document.querySelectorAll(".sg").forEach(x => x.classList.toggle("on", x === b));
+    render();
+  });
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+    VIEW = b.dataset.v;
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+    document.body.classList.toggle("qcview", VIEW === "qc");
+    render();
+  });
+}
+
+function render() {
+  const t = $("t");
+  if (!DATA || !DATA.rows.length) { t.innerHTML = "<tr><td>No prices yet - run the tracker first.</td></tr>"; return; }
+  const lab = MODE === "bau" ? (DATA.bauLabel || "BAU aligned") : (DATA.eventLabel || "Event aligned");
+  $("meta").textContent = "Updated " + DATA.updated + "  \u00B7  Comparing with: " + lab;
+  const rows = shown();
+  $("count").textContent = "Showing " + rows.length + " SKUs";
+  let h = "";
+  if (VIEW === "all") {
+    h = '<thead><tr><th>NH SKU</th><th class="lft">Category</th><th>Aligned</th>';
+    DATA.channels.forEach(c => h += logoTh(c, ""));
+    h += "<th>Not aligned</th></tr></thead><tbody>";
+    rows.forEach(r => {
+      h += '<tr><td title="' + esc(r.name) + '">' + esc(r.sku) + rkb(r) + '</td><td class="cat">' + esc(r.cat || "") +
+           '</td><td class="al">' + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</td>";
+      DATA.channels.forEach(ch => {
+        const c = r.cells[ch];
+        h += '<td class="' + (!c ? "none" : cls(cellState(r, c))) + '"' + (c ? ' title="' + esc(c[3]) + '"' : "") + ">" + cellText(c) + "</td>";
+      });
+      h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
+    });
+  } else {
+    const cols = qcCols(), apps = [...new Set(cols.map(c => c.ch))];
+    h = '<thead><tr class="r1"><th rowspan="2">NH SKU</th><th rowspan="2" class="lft">Category</th><th rowspan="2">Aligned</th>';
+    apps.forEach(a => h += logoTh(a, ' colspan="' + cols.filter(c => c.ch === a).length + '" style="border-left:2px solid var(--line)"'));
+    h += '<th rowspan="2">Not aligned</th></tr><tr class="r2">';
+    cols.forEach((c, i) => h += '<th class="city' + (i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "") + '" title="' + c.pin + '">' + esc(c.label) + "</th>");
+    h += "</tr></thead><tbody>";
+    rows.forEach(r => {
+      h += '<tr><td title="' + esc(r.name) + '">' + esc(r.sku) + rkb(r) + '</td><td class="cat">' + esc(r.cat || "") +
+           '</td><td class="al">' + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</td>";
+      cols.forEach((c, i) => {
+        const v = (r.qc[c.ch] || {})[c.pin];
+        const gl = i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "";
+        h += '<td class="' + (!v ? "none" : cls(qcState(r, v))) + gl + '" title="' + esc(c.ch + " \u00B7 " + c.label + " " + c.pin) + '">' +
+             (!v ? "\u2013" : v[1] ? "OOS" : rs(v[0])) + "</td>";
+      });
+      h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
+    });
+  }
+  t.innerHTML = h + "</tbody>";
+}
+
+function download() {
+  const q = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const rows = shown(), lines = [];
+  if (VIEW === "all") {
+    const head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU" : "Event") + " Aligned SP"];
+    DATA.channels.forEach(c => head.push(c + " Price", c + " Status"));
+    head.push("Channels not aligned");
+    lines.push(head.map(q).join(","));
+    rows.forEach(r => {
+      const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
+      DATA.channels.forEach(ch => { const c = r.cells[ch];
+        row.push(!c ? "" : (R0(c[0]) === R0(c[1]) ? R0(c[0]) : R0(c[0]) + "-" + R0(c[1])), !c ? "Not listed" : STATE[cellState(r, c)]); });
+      row.push(r.bad); lines.push(row.map(q).join(","));
+    });
+  } else {
+    const cols = qcCols(), head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU" : "Event") + " Aligned SP"];
+    cols.forEach(c => head.push(c.ch + " " + c.label + " " + c.pin + " Price", c.ch + " " + c.label + " " + c.pin + " Status"));
+    head.push("Not aligned"); lines.push(head.map(q).join(","));
+    rows.forEach(r => {
+      const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
+      cols.forEach(c => { const v = (r.qc[c.ch] || {})[c.pin]; row.push(v ? R0(v[0]) : "", v ? STATE[qcState(r, v)] : "Not listed"); });
+      row.push(r.bad); lines.push(row.map(q).join(","));
+    });
+  }
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "NH_Price_War_" + (VIEW === "qc" ? "QC_citywise_" : "") + MODE.toUpperCase() + "_" + (DATA.updated || "").replace(/[: ]/g, "-") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+$("dl").onclick = download;
+setupFilters();
+render();
+if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const k = $("katanas"); k.pauseAnimations(); k.setCurrentTime(1.2);
+}
+</script>
+</body>
+</html>
