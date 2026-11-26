@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Price War</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap">
 <style>
   :root {
     --bg: #ffffff; --text: #1f2328; --muted: #6b7280; --line: #e5e7eb; --head: #f6f7f9;
@@ -177,6 +178,71 @@
   .culonly { display: none !important; } body.culview .culonly { display: inline-flex !important; }
   .culonly input { min-width: 0 !important; flex: none !important; }
   .ctab td:nth-child(2) { white-space: nowrap; }
+  #history { display: none; padding: 0 20px 30px; }
+  body.hisview #history { display: block; } body.hisview .wrap, body.hisview #cards { display: none !important; }
+  body.hisview .qconly2 { display: none !important; }
+  .hisonly { display: none !important; } body.hisview .hisonly { display: inline-flex !important; }
+  .hhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+  .hhead .sku { font-weight: 800; font-size: 17px; } .hhead .sub { color: var(--muted); font-size: 12px; }
+  .hal { margin-left: auto; font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .hal .dash { width: 22px; border-top: 2px dashed var(--muted); display: inline-block; }
+  .hrow { display: grid; grid-template-columns: 150px minmax(0, 1fr) 90px; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .hch { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .hch img { height: 24px; width: auto; max-width: 48px; border-radius: 4px; background: #fff; }
+  .spark { display: block; overflow: visible; width: 100%; height: auto; }
+  .spark .step { fill: none; stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .spark .alline { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+  .spark .pt { fill: var(--text); stroke: var(--bg); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .spark .pt.low { fill: #d63a31; } .spark .pt.high { fill: #f08c00; }
+  .hnow { text-align: right; } .hnow b { display: block; font-size: 15px; } .hnow small { color: var(--muted); font-size: 11px; }
+  .lowt { color: #b3001b; } .hight { color: #b25e00; }
+  .haxis { display: flex; justify-content: space-between; margin: 4px 90px 0 162px; color: var(--muted); font-size: 11px; }
+  .hlog { min-width: 640px; margin-top: 6px; } .hlog img { height: 18px; width: auto; max-width: 36px; vertical-align: middle; border-radius: 3px; background: #fff; }
+  #history .lbl { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--muted); margin: 20px 0 6px; text-transform: uppercase; }
+  @media (max-width: 700px) { #history { padding: 0 12px 24px; overflow-x: auto; } .hrow { grid-template-columns: 90px minmax(0, 1fr) 64px; gap: 8px; }
+                              .hch span { display: none; } .haxis { margin: 4px 64px 0 98px; } }
+  .chron { display: none; }
+  body.hisview .chron { display: flex; align-items: stretch; margin: 0 20px 18px; height: 70px; }
+  .chron .rod { width: 16px; border-radius: 8px; flex: none; z-index: 1;
+                background: linear-gradient(90deg, #4a2c10, #9a6a35 45%, #5b3a16); box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+  .chron .paper { flex: 1; overflow: hidden; margin: 6px -4px; transform-origin: center;
+                  background: radial-gradient(ellipse at 20% 30%, rgba(160,110,40,.18), transparent 55%),
+                              radial-gradient(ellipse at 80% 70%, rgba(120,80,30,.16), transparent 50%), #f1e2bd;
+                  box-shadow: inset 0 0 18px rgba(110,70,20,.45); border-top: 1px solid #c9a86a; border-bottom: 1px solid #c9a86a; }
+  body.hisview.unroll .chron .paper { animation: unroll 1.4s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes unroll { from { transform: scaleX(0.02); } to { transform: scaleX(1); } }
+  .ctitle { height: 100%; display: flex; align-items: center; justify-content: center; gap: 14px; white-space: nowrap;
+            font-family: "Cinzel", Georgia, "Times New Roman", serif; color: #4a2c10; font-weight: 800; font-size: 22px; letter-spacing: 3px; }
+  .ctitle small { font-family: Georgia, serif; font-size: 12px; letter-spacing: 0; font-weight: 400; font-style: italic; color: #6b4a22; }
+  body.hisview.unroll .ctitle { animation: inkin 1.2s .9s both; }
+  @keyframes inkin { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: blur(0); } }
+  .hourglass { width: 20px; height: 28px; animation: flip 4s ease-in-out infinite; }
+  .hourglass .sand-top { animation: drain 4s linear infinite; transform-origin: 12px 15px; }
+  .hourglass .sand-bot { animation: fill 4s linear infinite; transform-origin: 12px 29px; }
+  .hourglass .sand-fall { animation: fall 4s linear infinite; }
+  @keyframes drain { 0% { transform: scaleY(1); } 80%, 100% { transform: scaleY(0); } }
+  @keyframes fill { 0% { transform: scaleY(0); } 80%, 100% { transform: scaleY(1); } }
+  @keyframes fall { 0%, 78% { opacity: 1; } 80%, 100% { opacity: 0; } }
+  @keyframes flip { 0%, 85% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+  body.hisview #history { background: radial-gradient(ellipse at 10% 0%, rgba(160,110,40,.10), transparent 40%), #faf3e1;
+                          border: 1px solid #e3cf9f; border-radius: 6px; margin: 0 20px 30px; padding: 16px 20px 24px;
+                          font-family: Georgia, "Times New Roman", serif; color: #3b2a14; }
+  body.hisview.unroll #history { animation: inkin 1s .6s both; }
+  body.hisview #history .hhead .sku { font-family: "Cinzel", Georgia, serif; letter-spacing: 1px; }
+  body.hisview #history .spark .step { stroke: #4a2c10; }
+  body.hisview #history .hrow { border-bottom-color: #e6d4a8; }
+  body.hisview #history .ctab th { background: #efdfb6; color: #4a2c10; font-family: "Cinzel", Georgia, serif; }
+  body.hisview #history .ctab td { border-bottom-color: #ead9ae; }
+  body.hisview #history .lbl { font-family: "Cinzel", Georgia, serif; color: #6b4a22; }
+  @media (prefers-color-scheme: dark) {
+    body.hisview #history { background: #2a2216; border-color: #5a4626; color: #efdfb6; }
+    body.hisview #history .ctab th { background: #3a2f1d; color: #efdfb6; }
+    body.hisview #history .spark .step { stroke: #efdfb6; }
+    body.hisview #history .hrow, body.hisview #history .ctab td { border-bottom-color: #4a3b22; }
+  }
+  @media (prefers-reduced-motion: reduce) { .chron .paper, .ctitle, #history, .hourglass, .hourglass * { animation: none !important; } }
+  @media (max-width: 700px) { body.hisview .chron { margin: 0 12px 14px; height: 56px; } .ctitle { font-size: 15px; gap: 8px; letter-spacing: 1px; }
+                              .ctitle small { display: none; } body.hisview #history { margin: 0 8px 24px; padding: 12px 10px; } }
 </style>
 </head>
 <body>
@@ -234,6 +300,7 @@
   <button class="tab on" data-v="all">All channels</button>
   <button class="tab" data-v="qc">QC &middot; city wise</button>
   <button class="tab culprit-tab" data-v="cul">&#x1FA78; Culprit</button>
+  <button class="tab" data-v="his">&#x1F4C8; Price history</button>
 </nav>
 <div class="filters">
   <span class="seg" title="Which price list the colours compare against">Compare with
@@ -246,6 +313,7 @@
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
   <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
   <label class="culonly"><input type="checkbox" id="fwar"> Only price wars</label>
+  <label class="hisonly">Show SKU <select id="fhist"></select></label>
   <button class="clear" id="fclear">Clear</button>
   <span id="count"></span>
 </div>
@@ -257,6 +325,16 @@
   <span class="drip" style="left:84%;animation-delay:1.4s"></span><span class="drip" style="left:94%;animation-delay:.2s;width:7px"></span>
 </div>
 <div id="culprits"></div>
+<div id="chron" class="chron" aria-hidden="true">
+  <span class="rod"></span>
+  <div class="paper"><div class="ctitle">
+    <svg class="hourglass" viewBox="0 0 24 32"><path d="M3 1h18M3 31h18M5 1c0 9 7 10 7 15S5 22 5 31M19 1c0 9-7 10-7 15s7 6 7 15" fill="none" stroke="#5b3a16" stroke-width="2" stroke-linecap="round"/>
+      <path class="sand-top" d="M7.5 6h9c-.8 4-4.5 6-4.5 9-0-3-3.7-5-4.5-9z" fill="#c8962e"/><path class="sand-bot" d="M7 29c1-4 4-5 5-6 1 1 4 2 5 6z" fill="#c8962e"/>
+      <line class="sand-fall" x1="12" y1="16" x2="12" y2="28" stroke="#c8962e" stroke-width="1.2"/></svg>
+    <span>THE PRICE CHRONICLES</span><small>every price change &middot; last 7 days</small></div></div>
+  <span class="rod"></span>
+</div>
+<div id="history"></div>
 <div class="wrap"><table id="t"></table></div>
 <div id="cards"></div>
 <script>
@@ -344,6 +422,7 @@ function setupFilters() {
   ["fcat", "fapp", "fcity", "fpri"].forEach(id => $(id).onchange = render);
   $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & mismatch</option>").join("");
   $("fwar").onchange = render;
+  $("fhist").onchange = () => { $("fsku").value = ""; render(); };
   $("fsort").onchange = () => { SORTCH = $("fsort").value; render(); };
   $("t").addEventListener("click", e => {
     const th = e.target.closest("th[data-ch]");
@@ -364,6 +443,9 @@ function setupFilters() {
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
     document.body.classList.toggle("qcview", VIEW === "qc");
     document.body.classList.toggle("culview", VIEW === "cul");
+    document.body.classList.toggle("hisview", VIEW === "his");
+    document.body.classList.remove("unroll");
+    if (VIEW === "his") { void document.body.offsetWidth; document.body.classList.add("unroll"); }
     render();
   });
 }
@@ -468,6 +550,66 @@ function renderCulprits(rows) {
     : '<div class="empty">No SKU is below the ' + lab + " price on any channel right now.</div>";
 }
 
+// ---------------- Price history: every price change of one SKU on every channel (last 7 days)
+const tms = t => { const m = String(t).match(/^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
+function renderHistory(rows) {
+  const list = rows.filter(r => Object.keys(r.hist || {}).length).sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9) || a.sku.localeCompare(b.sku));
+  const sel = $("fhist"), keep = sel.value;
+  sel.innerHTML = list.map(r => '<option value="' + esc(r.sku) + '">' + (r.rank ? "#" + r.rank + "  " : "") + esc(r.sku) + "</option>").join("");
+  const typed = $("fsku").value.trim().toUpperCase();
+  const pick = list.find(r => r.sku.toUpperCase() === typed) || list.find(r => r.sku === keep) || list[0];
+  $("count").textContent = list.length + " SKUs with history · last 7 days";
+  if (!pick) { $("history").innerHTML = '<div class="empty">No price history yet.</div>'; return; }
+  sel.value = pick.sku;
+  const r = pick, al = AL(r), lab = MODE === "bau" ? "BAU" : "Event";
+  const chans = DATA.channels.filter(c => (r.hist[c] || []).length);
+  const all = chans.flatMap(c => r.hist[c]);
+  const t0 = Math.min(...all.map(p => tms(p[0]))), t1 = Math.max(tms(DATA.updated), ...all.map(p => tms(p[0])));
+  const span = Math.max(t1 - t0, 3600e3);
+  const ps = all.map(p => p[1]).concat(al != null ? [al] : []);
+  let lo = Math.min(...ps), hi = Math.max(...ps); const pad = Math.max((hi - lo) * 0.15, hi * 0.03); lo -= pad; hi += pad;
+  const box = $("history").clientWidth || 900, W = Math.max(160, box - (MOBILE() ? 190 : 300)), H = 64, X = t => 6 + (tms(t) - t0) / span * (W - 12), Y = p => 6 + (hi - p) / (hi - lo) * (H - 12);
+  let h = '<div class="hhead"><span class="sku">' + esc(r.sku) + rkb(r) + "</span> <span class=\"sub\">" + esc(r.cat || "") +
+          (r.cat ? " · " : "") + esc(r.name || "") + "</span><span class=\"hal\">" + lab + " " + (al == null ? "–" : rs(al)) +
+          '<i class="dash"></i></span></div><div class="hgrid">';
+  chans.forEach(ch => {
+    const pts = r.hist[ch];
+    let d = "", prevY = null;
+    pts.forEach((p, i) => { const x = X(p[0]), y = Y(p[1]); d += (i ? "H" + x.toFixed(1) + "V" + y.toFixed(1) : "M" + x.toFixed(1) + " " + y.toFixed(1)); prevY = y; });
+    d += "H" + (W - 6);
+    const dots = pts.map((p, i) => {
+      const st = stateOf(p[1], p[1], false, al);
+      const prev = i ? pts[i - 1][1] : null;
+      return '<circle cx="' + X(p[0]).toFixed(1) + '" cy="' + Y(p[1]).toFixed(1) + '" r="4" class="pt ' + st + '"><title>' +
+             esc(ch + " · " + when(p[0]) + (p[2] ? " · " + p[2] : "") + "\n" + (prev == null ? "first reading " : "₹" + Math.round(prev) + " → ") +
+             "₹" + Math.round(p[1]) + (al ? "  (" + pct(p[1], al) + " vs " + lab + ")" : "")) + "</title></circle>";
+    }).join("");
+    const cur = pts[pts.length - 1][1], st = stateOf(cur, cur, false, al);
+    h += '<div class="hrow"><div class="hch">' + logoImg(ch) + "<span>" + esc(ch) + "</span></div>" +
+         '<svg viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" class="spark" role="img" aria-label="' + esc(ch) + ' price over time">' +
+         (al != null ? '<line x1="0" x2="' + W + '" y1="' + Y(al).toFixed(1) + '" y2="' + Y(al).toFixed(1) + '" class="alline"/>' : "") +
+         '<path d="' + d + '" class="step"/>' + dots + "</svg>" +
+         '<div class="hnow"><b class="' + (st === "low" || st === "high" ? st + "t" : "") + '">' + rs(cur) + "</b><small>" +
+         (pts.length - 1 ? (pts.length - 1) + " change" + (pts.length > 2 ? "s" : "") : "no change") + "</small></div></div>";
+  });
+  h += '</div><div class="haxis"><span>' + when(all.reduce((a, p) => p[0] < a ? p[0] : a, all[0][0])) +
+       "</span><span>" + when(DATA.updated) + "</span></div>";
+  // change log
+  const log = [];
+  chans.forEach(ch => r.hist[ch].forEach((p, i) => log.push({ch, t: p[0], city: p[2], from: i ? r.hist[ch][i - 1][1] : null, to: p[1]})));
+  log.sort((a, b) => b.t.localeCompare(a.t) || a.ch.localeCompare(b.ch));
+  h += '<div class="lbl">Every price change (newest first)</div><table class="ctab hlog"><thead><tr><th class="lft">When</th><th class="lft">Channel</th>' +
+       '<th class="lft">City</th><th>From</th><th>To</th><th>Change</th><th>vs ' + lab + "</th></tr></thead><tbody>";
+  log.forEach(x => {
+    const ch = x.from == null ? "first reading" : (x.to < x.from ? "▼ " : "▲ ") + "₹" + Math.abs(Math.round(x.to - x.from));
+    const st = stateOf(x.to, x.to, false, al);
+    h += '<tr><td class="lft">' + when(x.t) + '</td><td class="lft">' + logoImg(x.ch) + " " + esc(x.ch) + '</td><td class="lft">' + esc(x.city || "All India") +
+         "</td><td>" + (x.from == null ? "–" : rs(x.from)) + '</td><td class="' + grade(x.to, x.to, false, al) + '">' + rs(x.to) + "</td><td>" + ch + "</td><td>" +
+         (al ? pct(x.to, al) : "–") + "</td></tr>";
+  });
+  $("history").innerHTML = h + "</tbody></table>";
+}
+
 function render() {
   const t = $("t");
   if (!DATA || !DATA.rows.length) { t.innerHTML = "<tr><td>No prices yet - run the tracker first.</td></tr>"; return; }
@@ -476,6 +618,7 @@ function render() {
   const rows = shown();
   $("count").textContent = "Showing " + rows.length + " SKUs";
   if (VIEW === "cul") { renderCulprits(rows); return; }
+  if (VIEW === "his") { renderHistory(rows); return; }
   if (MOBILE()) { renderCards(rows); return; }
   let h = "";
   if (VIEW === "all") {

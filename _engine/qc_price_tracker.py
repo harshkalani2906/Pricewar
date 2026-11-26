@@ -532,7 +532,17 @@ def append_history(rows):
             w.writerow(r)
 
 
-def trim_history(keep_days=180):
+def trim_history(keep_days=7):
+    """Keeps only the last 7 days: price history rows, Excel reports, run logs, debug screenshots."""
+    old = time.time() - keep_days * 86400
+    for pat in (os.path.join(OUT_DIR, "Price_Parity_*.xlsx"), os.path.join(OUT_DIR, "QC_Prices_*.xlsx"),
+                os.path.join(LOG_DIR, "run_*.txt"), os.path.join(DEBUG_DIR, "*.png")):
+        for f in glob.glob(pat):
+            try:
+                if os.path.getmtime(f) < old:
+                    os.remove(f)
+            except OSError:
+                pass
     if not os.path.exists(HIST_FILE):
         return
     cut = (dt.date.today() - dt.timedelta(days=keep_days)).isoformat()

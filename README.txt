@@ -43,7 +43,7 @@ RESULTS (folder 2_Output) - don't edit
                       3. rows that could not be read
    Detail           every channel x pincode x product
    Summary          counts per channel
- history\qc_price_history.csv   all runs (the dashboard reads this). Kept 180 days.
+ history\qc_price_history.csv   all runs (the dashboard reads this). Kept 7 days (older rows are deleted automatically).
  _Logs   run logs (send the newest one to Claude if something looks wrong)
 
 STATUS MEANING

@@ -163,7 +163,7 @@ def categories():
     return {k: v.most_common(1)[0][0] for k, v in out.items()}
 
 
-def price_history(rows, cutoff_days=30):
+def price_history(rows, cutoff_days=7):
     """{NH SKU: {channel: [[run time, lowest in-stock price, city], ...]}} - one point per run,
     only where the price changed (for the Culprit tab: who cut the price first, who followed)."""
     import datetime as _dt
@@ -217,7 +217,7 @@ def build(log=print, aligned_label="", tolerance=1.0):
         k = (r["Channel"], r["Channel ID"], r["Pincode"])
         if r["Run Time"] >= latest.get(k, {}).get("Run Time", ""):
             latest[k] = r
-    hist = price_history(rows, cutoff_days=30)
+    hist = price_history(rows, cutoff_days=7)
     rows = list(latest.values())
     last = {}
     for r in rows:
