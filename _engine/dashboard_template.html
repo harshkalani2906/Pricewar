@@ -106,6 +106,10 @@
     .app { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
     .app img { height: 20px; width: auto; max-width: 36px; border-radius: 4px; background: #fff; }
   }
+  th.sortable { cursor: pointer; }
+  th.sortable:hover { background: var(--line); }
+  th.sorted { box-shadow: inset 0 -3px 0 var(--text); }
+  th .arrow { display: block; font-size: 9px; line-height: 10px; color: var(--text); }
 </style>
 </head>
 <body>
@@ -172,6 +176,7 @@
   <datalist id="skulist"></datalist>
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
+  <label>Sort by <select id="fsort"><option value="">Most not-aligned</option></select></label>
   <button class="clear" id="fclear">Clear</button>
   <span id="count"></span>
 </div>
@@ -179,7 +184,7 @@
 <div id="cards"></div>
 <script>
 const DATA = /*__DATA__*/null;
-let VIEW = "all", MODE = "event";
+let VIEW = "all", MODE = "event", SORTCH = "";
 const TOL = (DATA && DATA.tol != null) ? DATA.tol : 1;
 const $ = id => document.getElementById(id);
 const R0 = v => v == null || v === "" ? "" : Math.round(v);
@@ -202,9 +207,11 @@ function rkb(r) { return r.rank == null ? "" : ' <span class="rk' + (r.tier === 
 function cls(st) { return st === "low" || st === "high" || st === "oos" ? st : ""; }
 function logoTh(c, extra) {
   const L = DATA.logos || {};
-  if (!L[c]) return "<th" + extra + ">" + esc(c) + "</th>";
-  return '<th class="logo"' + extra + ' title="' + esc(c) + '"><span class="lg"><img src="' + L[c] + '" alt="' + esc(c) + '">' +
-         "</span></th>";
+  const on = SORTCH === c ? " sorted" : "";
+  const tip = ' title="' + esc(c) + ' \u2013 click to sort by ' + esc(c) + ' sales and not-aligned (click again to undo)"';
+  const inner = L[c] ? '<span class="lg"><img src="' + L[c] + '" alt="' + esc(c) + '"></span>' : esc(c);
+  return '<th class="logo sortable' + on + '" data-ch="' + esc(c) + '"' + extra + tip + ">" + inner +
+         (on ? '<span class="arrow">\u25BC</span>' : "") + "</th>";
 }
 
 // ---- columns of the current view: [{ch, pin, label}]
@@ -229,6 +236,15 @@ function shown() {
     rows = rows.map(r => Object.assign({}, r, {bad: allBad(r)}));
   }
   const rk = r => r.rank == null ? 99999 : r.rank;
+  if (SORTCH) {
+    // clicked channel: SKUs off the aligned price THERE first, then by that channel's own sales rank
+    const ch = SORTCH, cols = VIEW === "qc" ? qcCols().filter(c => c.ch === ch) : [];
+    const off = r => VIEW === "qc" ? cols.filter(c => { const v = (r.qc[ch] || {})[c.pin]; return v && OFF(qcState(r, v)); }).length
+                                   : (r.cells[ch] && OFF(cellState(r, r.cells[ch])) ? 1 : 0);
+    const has = r => VIEW === "qc" ? (cols.some(c => (r.qc[ch] || {})[c.pin]) ? 1 : 0) : (r.cells[ch] ? 1 : 0);
+    const cr = r => (r.cr || {})[ch] || 99999;
+    return rows.sort((a, b) => off(b) - off(a) || has(b) - has(a) || cr(a) - cr(b) || b.bad - a.bad || rk(a) - rk(b));
+  }
   return rows.sort((a, b) => b.bad - a.bad || (AL(a) == null) - (AL(b) == null) || rk(a) - rk(b) || a.sku.localeCompare(b.sku));
 }
 
@@ -240,8 +256,17 @@ function setupFilters() {
   $("fapp").innerHTML += (DATA.qcApps || []).map(a => "<option>" + esc(a) + "</option>").join("");
   $("fcity").innerHTML += (DATA.pins || []).map(p => '<option value="' + p.pin + '">' + esc((p.city || "") + " " + p.pin) + "</option>").join("");
   ["fcat", "fapp", "fcity", "fpri"].forEach(id => $(id).onchange = render);
+  $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & not aligned</option>").join("");
+  $("fsort").onchange = () => { SORTCH = $("fsort").value; render(); };
+  $("t").addEventListener("click", e => {
+    const th = e.target.closest("th[data-ch]");
+    if (!th) return;
+    SORTCH = SORTCH === th.dataset.ch ? "" : th.dataset.ch;
+    $("fsort").value = SORTCH;
+    render();
+  });
   $("fsku").oninput = render;
-  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity"].forEach(id => $(id).value = ""); $("fpri").value = "80"; render(); };
+  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity", "fsort"].forEach(id => $(id).value = ""); SORTCH = ""; $("fpri").value = "80"; render(); };
   document.querySelectorAll(".sg").forEach(b => b.onclick = () => {
     MODE = b.dataset.m;
     document.querySelectorAll(".sg").forEach(x => x.classList.toggle("on", x === b));

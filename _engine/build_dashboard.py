@@ -121,6 +121,29 @@ def priority():
     return out
 
 
+def channel_ranks():
+    """{NH SKU: {channel: sales rank in that channel}} from SKU Priority.xlsx, sheet 'Channel Rank'.
+    Only the rank goes into the dashboard (no revenue figures)."""
+    out = {}
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(os.path.join(ROOT, "1_Input", "SKU Priority.xlsx"), read_only=True, data_only=True)
+        if "Channel Rank" not in wb.sheetnames:
+            return out
+        rows = wb["Channel Rank"].iter_rows(values_only=True)
+        head = [str(h or "").strip().lower() for h in next(rows)]
+        ci, si = head.index("channel"), head.index("nh sku")
+        ri = next(i for i, h in enumerate(head) if h.startswith("rank"))
+        for r in rows:
+            if r and r[si] and r[ri]:
+                sku = str(r[si]).strip()
+                sku = sku[3:] if sku.upper().startswith("BL-") else sku
+                out.setdefault(sku, {})[str(r[ci]).strip()] = int(r[ri])
+    except Exception:
+        pass
+    return out
+
+
 def categories():
     """{NH SKU: Category} from 1_Input/Product Master.xlsx (Category column)."""
     import collections
@@ -211,7 +234,9 @@ def build(log=print, aligned_label="", tolerance=1.0):
                     "ale": ev.get(sku) if ev else d["al"], "alb": bau.get(sku)})
     cats = categories()
     pri = priority()
+    crk = channel_ranks()
     for d in out:
+        d["cr"] = crk.get(d["sku"], {})
         d["cat"] = cats.get(d["sku"], "")
         d["tier"], d["rank"] = pri.get(d["sku"], ("", None))
 
