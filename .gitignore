@@ -1,0 +1,14 @@
+# Browser logins / cookies - never upload
+_engine/state/
+# Results and logs (the dashboard page itself IS uploaded)
+2_Output/
+3_Dashboard/*
+!3_Dashboard/price-pulse.html
+# Python cache and old backups
+__pycache__/
+*.pyc
+_engine/_backup_before_25Nov/
+_old_inputs/
+_old_dashboard/
+# Excel lock files
+~$*
