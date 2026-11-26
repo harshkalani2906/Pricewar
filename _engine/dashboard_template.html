@@ -121,6 +121,45 @@
   th.sortable:hover { background: var(--line); }
   th.sorted { box-shadow: inset 0 -3px 0 var(--text); }
   th .arrow { display: block; font-size: 9px; line-height: 10px; color: var(--text); }
+  .blood, #culprits { display: none; }
+  body.culview .blood { display: block; } body.culview #culprits { display: grid; }
+  body.culview .wrap, body.culview #cards { display: none !important; }
+  body.culview .qconly2 { display: none !important; }
+  .culprit-tab.on { color: #b3001b; border-bottom-color: #b3001b; }
+  .blood { position: relative; margin: 0 20px 34px; height: 64px; border-radius: 10px 10px 4px 4px;
+           background: linear-gradient(180deg, #5c0010 0%, #9b0019 60%, #b3001b 100%); overflow: visible; }
+  .blood-title { position: absolute; inset: 0; display: flex; align-items: center; gap: 14px; padding: 0 22px;
+                 color: #fff; font-weight: 900; letter-spacing: 3px; font-size: 24px; text-shadow: 0 2px 0 #3a000a; }
+  .blood-title small { font-size: 12px; letter-spacing: 0; font-weight: 500; opacity: .85; text-shadow: none; }
+  .drip { position: absolute; top: 100%; width: 9px; height: 0; background: #b3001b; border-radius: 0 0 8px 8px;
+          animation: drip 3.2s ease-in infinite; }
+  .drip::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 12px; margin-left: -5px;
+                 background: #b3001b; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; opacity: 0; animation: drop 3.2s ease-in infinite;
+                 animation-delay: inherit; }
+  @keyframes drip { 0% { height: 0; } 55% { height: 22px; } 70% { height: 26px; } 100% { height: 0; } }
+  @keyframes drop { 0%, 60% { opacity: 0; transform: translateY(0); } 65% { opacity: 1; } 100% { opacity: 0; transform: translateY(46px); } }
+  @media (prefers-reduced-motion: reduce) { .drip, .drip::after { animation: none; height: 16px; } }
+  #culprits { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; padding: 0 20px 30px; }
+  .war { border: 1px solid var(--line); border-left: 5px solid #b3001b; border-radius: 10px; padding: 14px 16px; background: var(--bg); }
+  .war .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .war .sku { font-weight: 800; font-size: 15px; }
+  .war .sub { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+  .war .lbl { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--muted); margin: 10px 0 5px; text-transform: uppercase; }
+  .war .lbl.red { color: #b3001b; }
+  .who { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+  .who img { height: 26px; width: auto; max-width: 52px; border-radius: 5px; background: #fff; }
+  .who b { font-size: 15px; }
+  .who .t { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+  .who.cul { background: #fde8e7; border: 1px solid #f3b6b1; }
+  .who.cul b { color: #b3001b; }
+  .fol { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fol .who { border: 1px solid var(--line); padding: 5px 8px; flex: 1 1 180px; }
+  .fol .who img { height: 20px; max-width: 40px; }
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--head); color: var(--muted); }
+  .tag.m { background: #fde8e7; color: #b3001b; }
+  .empty { color: var(--muted); padding: 20px; }
+  @media (max-width: 700px) { #culprits { grid-template-columns: 1fr; padding: 0 12px 24px; } .blood { margin: 0 12px 34px; }
+                              .blood-title { font-size: 18px; padding: 0 14px; } .blood-title small { display: none; } }
 </style>
 </head>
 <body>
@@ -177,6 +216,7 @@
 <nav class="tabs">
   <button class="tab on" data-v="all">All channels</button>
   <button class="tab" data-v="qc">QC &middot; city wise</button>
+  <button class="tab culprit-tab" data-v="cul">&#x1FA78; Culprit</button>
 </nav>
 <div class="filters">
   <span class="seg" title="Which price list the colours compare against">Compare with
@@ -187,10 +227,18 @@
   <datalist id="skulist"></datalist>
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
-  <label>Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
+  <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
   <button class="clear" id="fclear">Clear</button>
   <span id="count"></span>
 </div>
+<div id="blood" class="blood" aria-hidden="true">
+  <div class="blood-title">CULPRITS <small>who cut the price first &middot; who followed</small></div>
+  <span class="drip" style="left:6%;animation-delay:0s"></span><span class="drip" style="left:17%;animation-delay:1.1s;width:7px"></span>
+  <span class="drip" style="left:29%;animation-delay:.4s;width:12px"></span><span class="drip" style="left:43%;animation-delay:1.8s"></span>
+  <span class="drip" style="left:58%;animation-delay:.8s;width:6px"></span><span class="drip" style="left:71%;animation-delay:2.3s;width:11px"></span>
+  <span class="drip" style="left:84%;animation-delay:1.4s"></span><span class="drip" style="left:94%;animation-delay:.2s;width:7px"></span>
+</div>
+<div id="culprits"></div>
 <div class="wrap"><table id="t"></table></div>
 <div id="cards"></div>
 <script>
@@ -296,6 +344,7 @@ function setupFilters() {
     VIEW = b.dataset.v;
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
     document.body.classList.toggle("qcview", VIEW === "qc");
+    document.body.classList.toggle("culview", VIEW === "cul");
     render();
   });
 }
@@ -331,6 +380,67 @@ function renderCards(rows) {
   $("cards").innerHTML = h || '<p class="sub">No SKUs match the filters.</p>';
 }
 
+// ---------------- Culprit: who went below the Event/BAU price first, who followed
+const when = t => { const m = String(t).match(/^(\d{4})-(\d\d)-(\d\d) (\d\d:\d\d)/);
+  return m ? (+m[3]) + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m[2] - 1] + " " + m[4] : t; };
+const FIRST = (() => { let f = ""; (DATA && DATA.rows || []).forEach(r => Object.values(r.hist || {}).forEach(p =>
+  { if (p.length && (!f || p[0][0] < f)) f = p[0][0]; })); return f; })();
+function war(r) {
+  const al = AL(r); if (al == null) return null;
+  const below = [], hold = [];
+  Object.keys(r.cells).forEach(ch => {
+    const c = r.cells[ch]; if (!c || c[2]) return;          // not listed / out of stock now
+    const pts = (r.hist || {})[ch] || [];
+    if (c[0] < al - TOL) {
+      let i = pts.length - 1;
+      while (i > 0 && pts[i - 1][1] < al - TOL) i--;
+      const since = pts.length ? pts[Math.max(i, 0)][0] : DATA.updated;
+      const city = pts.length ? pts[pts.length - 1][2] : "";
+      below.push({ch, p: c[0], since, city, start: !pts.length || (i <= 0 && pts[0][0] <= FIRST)});
+    } else hold.push({ch, p: c[0]});
+  });
+  if (!below.length) return null;
+  below.sort((a, b) => a.since.localeCompare(b.since) || a.p - b.p || ((r.cr || {})[a.ch] || 1e9) - ((r.cr || {})[b.ch] || 1e9));
+  const c0 = below[0];
+  return {al, cul: c0, fol: below.slice(1), hold, gap: (al - c0.p) / al};
+}
+function pct(p, al) { return Math.round((p - al) / al * 100) + "%"; }
+function renderCulprits(rows) {
+  const W = rows.map(r => ({r, w: war(r)})).filter(x => x.w);
+  W.sort((a, b) => (b.w.fol.length > 0) - (a.w.fol.length > 0) || b.w.gap - a.w.gap || ((a.r.rank || 1e9) - (b.r.rank || 1e9)));
+  $("count").textContent = W.length + " SKUs in a price war";
+  const lab = MODE === "bau" ? "BAU" : "Event";
+  let h = "";
+  W.forEach(({r, w}) => {
+    const c = w.cul;
+    h += '<div class="war"><div class="top"><span class="sku">' + esc(r.sku) + rkb(r) + '</span><span class="tag m">' +
+         (w.fol.length + 1) + " below " + lab + "</span></div>" +
+         '<div class="sub">' + esc(r.cat || "") + (r.cat ? " \u00B7 " : "") + lab + " " + rs(w.al) + "</div>" +
+         '<div class="lbl red">\uD83E\uDE78 Culprit \u2013 went below first</div>' +
+         '<div class="who cul">' + logoImg(c.ch) + "<span><b>" + rs(c.p) + "</b> " + pct(c.p, w.al) +
+         (c.city ? " \u00B7 " + esc(c.city) : "") + '</span><span class="t">' +
+         (c.start ? "already below when tracking started<br>" + when(c.since) : "since " + when(c.since)) + "</span></div>";
+    if (w.fol.length) {
+      h += '<div class="lbl">Followed (in order)</div><div class="fol">';
+      w.fol.forEach(x => {
+        const tag = x.p < c.p - TOL ? '<span class="tag m">went even lower</span>'
+                  : x.p <= c.p + TOL ? '<span class="tag m">matched</span>' : '<span class="tag">below ' + lab + "</span>";
+        h += '<div class="who">' + logoImg(x.ch) + "<span><b>" + rs(x.p) + "</b> " + pct(x.p, w.al) + "</span>" +
+             '<span class="t">' + tag +
+             "<br>" + (x.start ? "from start" : when(x.since)) + "</span></div>";
+      });
+      h += "</div>";
+    }
+    if (w.hold.length) {
+      h += '<div class="lbl">Holding the price</div><div class="fol">';
+      w.hold.forEach(x => { h += '<div class="who">' + logoImg(x.ch) + "<span><b>" + rs(x.p) + "</b></span></div>"; });
+      h += "</div>";
+    }
+    h += "</div>";
+  });
+  $("culprits").innerHTML = h || '<div class="empty">No SKU is below the ' + lab + " price on any channel right now.</div>";
+}
+
 function render() {
   const t = $("t");
   if (!DATA || !DATA.rows.length) { t.innerHTML = "<tr><td>No prices yet - run the tracker first.</td></tr>"; return; }
@@ -338,6 +448,7 @@ function render() {
   $("meta").textContent = "Updated " + DATA.updated + "  \u00B7  Comparing with: " + lab;
   const rows = shown();
   $("count").textContent = "Showing " + rows.length + " SKUs";
+  if (VIEW === "cul") { renderCulprits(rows); return; }
   if (MOBILE()) { renderCards(rows); return; }
   let h = "";
   if (VIEW === "all") {

@@ -163,6 +163,39 @@ def categories():
     return {k: v.most_common(1)[0][0] for k, v in out.items()}
 
 
+def price_history(rows, cutoff_days=30):
+    """{NH SKU: {channel: [[run time, lowest in-stock price, city], ...]}} - one point per run,
+    only where the price changed (for the Culprit tab: who cut the price first, who followed)."""
+    import datetime as _dt
+    times = sorted({r["Run Time"] for r in rows if r["Run Time"]})
+    if not times:
+        return {}
+    try:
+        cut = (_dt.datetime.strptime(times[-1], "%Y-%m-%d %H:%M")
+               - _dt.timedelta(days=cutoff_days)).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        cut = ""
+    best = {}
+    for r in rows:
+        if r["Run Time"] < cut or r["Status"] not in ("At par", "Below aligned", "Above aligned", "No aligned price"):
+            continue
+        sku = r["NH SKU"]
+        sku = sku[3:] if sku.upper().startswith("BL-") else sku
+        sp = f(r["Selling Price"])
+        if not sku or sp is None:
+            continue
+        k = (sku, r["Channel"], r["Run Time"])
+        city = "" if r["Pincode"] == "All India" else (r["City"] or r["Pincode"])
+        if k not in best or sp < best[k][0]:
+            best[k] = (sp, city)
+    out = {}
+    for (sku, ch, t), (p, city) in sorted(best.items(), key=lambda x: x[0][2]):
+        pts = out.setdefault(sku, {}).setdefault(ch, [])
+        if not pts or round(pts[-1][1]) != round(p):
+            pts.append([t, p, city])
+    return out
+
+
 def build(log=print, aligned_label="", tolerance=1.0):
     if not os.path.exists(HIST_FILE):
         log("Dashboard: no history yet")
@@ -184,6 +217,7 @@ def build(log=print, aligned_label="", tolerance=1.0):
         k = (r["Channel"], r["Channel ID"], r["Pincode"])
         if r["Run Time"] >= latest.get(k, {}).get("Run Time", ""):
             latest[k] = r
+    hist = price_history(rows, cutoff_days=30)
     rows = list(latest.values())
     last = {}
     for r in rows:
@@ -237,6 +271,7 @@ def build(log=print, aligned_label="", tolerance=1.0):
     crk = channel_ranks()
     for d in out:
         d["cr"] = crk.get(d["sku"], {})
+        d["hist"] = hist.get(d["sku"], {})
         d["cat"] = cats.get(d["sku"], "")
         d["tier"], d["rank"] = pri.get(d["sku"], ("", None))
 
