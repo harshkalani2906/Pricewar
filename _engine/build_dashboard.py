@@ -47,7 +47,8 @@ def logos(log=print):
     os.makedirs(LOGO_DIR, exist_ok=True)
     out = {}
     for ch, site in LOGO_SITE.items():
-        path = os.path.join(LOGO_DIR, site.split(".")[0] + ".png")
+        own = os.path.join(LOGO_DIR, ch.lower().replace(" ", "") + ".png")   # e.g. logos/fkminutes.png
+        path = own if os.path.exists(own) else os.path.join(LOGO_DIR, site.split(".")[0] + ".png")
         if not os.path.exists(path) or os.path.getsize(path) < 200:
             for u in LOGO_URLS:
                 try:

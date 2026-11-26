@@ -55,8 +55,8 @@
   td.cnt { font-weight: 600; }
   tr:hover td { filter: brightness(0.97); }
   th.logo { text-align: center; padding: 6px 12px; }
-  .lg { position: relative; display: inline-block; width: 30px; height: 30px; vertical-align: middle; }
-  .lg img { width: 30px; height: 30px; border-radius: 7px; object-fit: contain; background: #fff;
+  .lg { position: relative; display: inline-block; height: 30px; vertical-align: middle; }
+  .lg img { width: auto; max-width: 60px; height: 30px; border-radius: 7px; object-fit: contain; background: #fff;
             box-shadow: 0 0 0 1px var(--line); }
   .lg .bolt { position: absolute; right: -7px; bottom: -5px; width: 16px; height: 16px; border-radius: 50%;
               background: #ffd23f; color: #1f2328; font-size: 10px; line-height: 16px; text-align: center;
@@ -78,6 +78,34 @@
   .seg .sg.on { background: var(--btn); color: var(--btn-tx); border-color: var(--btn); }
   .rk { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 6px; margin-left: 4px; }
   .rk.t50 { color: #1a7f37; border-color: #9fd5ae; }
+  #cards { display: none; }
+  @media (max-width: 700px) {
+    header { padding: 12px 16px; gap: 8px 12px; }
+    .brand .nh { height: 40px; } .brand svg { width: 44px; height: 34px; } h1 { font-size: 18px; }
+    .meta { flex-basis: 100%; font-size: 12px; order: 3; }
+    .right { margin-left: 0; width: 100%; justify-content: space-between; order: 4; }
+    .legend { gap: 10px; font-size: 12px; flex-wrap: wrap; }
+    .tabs { padding: 0 8px; overflow-x: auto; } .tab { padding: 10px; white-space: nowrap; }
+    .filters { padding: 0 16px 12px; gap: 8px; }
+    .filters label { width: 100%; justify-content: space-between; }
+    .filters select, .filters input { min-width: 0; flex: 1; }
+    .seg { width: 100%; } .seg .sg { flex: 1; }
+    .wrap { display: none; }
+    #cards { display: block; padding: 0 12px 24px; }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
+    .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .card .sku { font-weight: 700; font-size: 15px; }
+    .card .sub { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+    .card .bad { font-size: 12px; font-weight: 700; color: var(--low-tx); white-space: nowrap; }
+    .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+    .chip { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; font-weight: 600; font-size: 13px; }
+    .chip img { height: 20px; width: auto; max-width: 36px; border-radius: 4px; background: #fff; }
+    .chip.low { background: var(--low-bg); color: var(--low-tx); border-color: transparent; }
+    .chip.high { background: var(--high-bg); color: var(--high-tx); border-color: transparent; }
+    .chip.oos { color: var(--oos-tx); }
+    .app { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .app img { height: 20px; width: auto; max-width: 36px; border-radius: 4px; background: #fff; }
+  }
 </style>
 </head>
 <body>
@@ -148,6 +176,7 @@
   <span id="count"></span>
 </div>
 <div class="wrap"><table id="t"></table></div>
+<div id="cards"></div>
 <script>
 const DATA = /*__DATA__*/null;
 let VIEW = "all", MODE = "event";
@@ -175,7 +204,7 @@ function logoTh(c, extra) {
   const L = DATA.logos || {};
   if (!L[c]) return "<th" + extra + ">" + esc(c) + "</th>";
   return '<th class="logo"' + extra + ' title="' + esc(c) + '"><span class="lg"><img src="' + L[c] + '" alt="' + esc(c) + '">' +
-         (c === "FK Minutes" ? '<span class="bolt">\u26A1</span>' : "") + "</span></th>";
+         "</span></th>";
 }
 
 // ---- columns of the current view: [{ch, pin, label}]
@@ -226,6 +255,37 @@ function setupFilters() {
   });
 }
 
+const MOBILE = () => window.matchMedia("(max-width: 700px)").matches;
+function logoImg(c) { const L = DATA.logos || {}; return L[c] ? '<img src="' + L[c] + '" alt="' + esc(c) + '" title="' + esc(c) + '">' : esc(c); }
+function renderCards(rows) {
+  let h = "";
+  const shown = rows.slice(0, 300);
+  shown.forEach(r => {
+    h += '<div class="card"><div class="top"><span class="sku">' + esc(r.sku) + rkb(r) + "</span>" +
+         (r.bad ? '<span class="bad">' + r.bad + " not aligned</span>" : "") + "</div>" +
+         '<div class="sub">' + esc(r.cat || "") + (r.cat ? " \u00B7 " : "") + "Aligned " + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</div>";
+    if (VIEW === "all") {
+      h += '<div class="chips">';
+      DATA.channels.forEach(ch => { const c = r.cells[ch]; if (!c) return;
+        h += '<span class="chip ' + cls(cellState(r, c)) + '" title="' + esc(c[3]) + '">' + logoImg(ch) + cellText(c) + "</span>"; });
+      h += "</div>";
+    } else {
+      const cols = qcCols();
+      [...new Set(cols.map(c => c.ch))].forEach(a => {
+        const cs = cols.filter(c => c.ch === a && (r.qc[a] || {})[c.pin]);
+        if (!cs.length) return;
+        h += '<div class="app">' + logoImg(a) + esc(a) + '</div><div class="chips">';
+        cs.forEach(c => { const v = r.qc[a][c.pin];
+          h += '<span class="chip ' + cls(qcState(r, v)) + '">' + esc(c.label) + " " + (v[1] ? "OOS" : rs(v[0])) + "</span>"; });
+        h += "</div>";
+      });
+    }
+    h += "</div>";
+  });
+  if (rows.length > shown.length) h += '<p class="sub">Showing first 300 - use the filters to narrow down.</p>';
+  $("cards").innerHTML = h || '<p class="sub">No SKUs match the filters.</p>';
+}
+
 function render() {
   const t = $("t");
   if (!DATA || !DATA.rows.length) { t.innerHTML = "<tr><td>No prices yet - run the tracker first.</td></tr>"; return; }
@@ -233,6 +293,7 @@ function render() {
   $("meta").textContent = "Updated " + DATA.updated + "  \u00B7  Comparing with: " + lab;
   const rows = shown();
   $("count").textContent = "Showing " + rows.length + " SKUs";
+  if (MOBILE()) { renderCards(rows); return; }
   let h = "";
   if (VIEW === "all") {
     h = '<thead><tr><th>NH SKU</th><th class="lft">Category</th><th>Aligned</th>';
@@ -302,6 +363,7 @@ function download() {
 $("dl").onclick = download;
 setupFilters();
 render();
+window.matchMedia("(max-width: 700px)").addEventListener("change", render);
 if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) {
   const k = $("katanas"); k.pauseAnimations(); k.setCurrentTime(1.2);
 }
