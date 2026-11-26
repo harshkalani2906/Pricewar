@@ -359,7 +359,7 @@
   <datalist id="skulist"></datalist>
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
-  <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
+  <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option><option value="~asc">Fewest mismatches</option></select></label>
   <label class="culonly"><input type="checkbox" id="fwar"> Only price wars</label>
   <label class="hisonly">Show SKU <select id="fhist"></select></label>
   <button class="clear" id="fclear">Clear</button>
@@ -387,7 +387,7 @@
 <div id="cards"></div>
 <script>
 const DATA = /*__DATA__*/null;
-let VIEW = "all", MODE = "event", SORTCH = "";
+let VIEW = "all", MODE = "event", SORTCH = "", MASC = false;   // MASC = fewest mismatches first
 const TOL = (DATA && DATA.tol != null) ? DATA.tol : 1;
 const $ = id => document.getElementById(id);
 const R0 = v => v == null || v === "" ? "" : Math.round(v);
@@ -426,6 +426,11 @@ function logoTh(c, extra) {
          (on ? '<span class="arrow">\u25BC</span>' : "") + "</th>";
 }
 
+function misTh(extra) {
+  return '<th class="sortable msort' + (SORTCH ? "" : " sorted") + '"' + extra +
+         ' title="Click to sort by mismatches (click again: fewest first)">Mismatch<span class="arrow">' +
+         (SORTCH ? "&nbsp;" : MASC ? "\u25B2 fewest" : "\u25BC most") + "</span></th>";
+}
 // ---- columns of the current view: [{ch, pin, label}]
 function qcCols() {
   const app = $("fapp").value, city = $("fcity").value, out = [];
@@ -457,7 +462,7 @@ function shown() {
     const cr = r => (r.cr || {})[ch] || 99999;
     return rows.sort((a, b) => off(b) - off(a) || has(b) - has(a) || cr(a) - cr(b) || b.bad - a.bad || rk(a) - rk(b));
   }
-  return rows.sort((a, b) => b.bad - a.bad || (AL(a) == null) - (AL(b) == null) || rk(a) - rk(b) || a.sku.localeCompare(b.sku));
+  return rows.sort((a, b) => (MASC ? a.bad - b.bad : b.bad - a.bad) || (AL(a) == null) - (AL(b) == null) || rk(a) - rk(b) || a.sku.localeCompare(b.sku));
 }
 
 function setupFilters() {
@@ -471,16 +476,21 @@ function setupFilters() {
   $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & mismatch</option>").join("");
   $("fwar").onchange = render;
   $("fhist").onchange = () => { $("fsku").value = ""; render(); };
-  $("fsort").onchange = () => { SORTCH = $("fsort").value; render(); };
+  $("fsort").onchange = () => { const v = $("fsort").value; MASC = v === "~asc"; SORTCH = v === "~asc" ? "" : v; render(); };
   $("t").addEventListener("click", e => {
+    const mh = e.target.closest("th.msort");
+    if (mh) {                                  // Mismatch header: most first <-> fewest first
+      MASC = SORTCH ? false : !MASC; SORTCH = "";
+      $("fsort").value = MASC ? "~asc" : ""; render(); return;
+    }
     const th = e.target.closest("th[data-ch]");
     if (!th) return;
-    SORTCH = SORTCH === th.dataset.ch ? "" : th.dataset.ch;
+    SORTCH = SORTCH === th.dataset.ch ? "" : th.dataset.ch; MASC = false;
     $("fsort").value = SORTCH;
     render();
   });
   $("fsku").oninput = render;
-  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity", "fsort"].forEach(id => $(id).value = ""); SORTCH = ""; $("fpri").value = "80"; render(); };
+  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity", "fsort"].forEach(id => $(id).value = ""); SORTCH = ""; MASC = false; $("fpri").value = "80"; render(); };
   document.querySelectorAll(".sg").forEach(b => b.onclick = () => {
     MODE = b.dataset.m;
     document.querySelectorAll(".sg").forEach(x => x.classList.toggle("on", x === b));
@@ -672,7 +682,7 @@ function render() {
   if (VIEW === "all") {
     h = '<thead><tr><th>NH SKU</th><th class="lft">Category</th><th>' + (MODE === "bau" ? "BAU" : "Event") + '</th>';
     DATA.channels.forEach(c => h += logoTh(c, ""));
-    h += "<th>Mismatch</th></tr></thead><tbody>";
+    h += misTh("") + "</tr></thead><tbody>";
     rows.forEach(r => {
       h += '<tr><td title="' + esc(r.name) + '">' + esc(r.sku) + rkb(r) + '</td><td class="cat">' + esc(r.cat || "") +
            '</td><td class="al">' + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</td>";
@@ -686,7 +696,7 @@ function render() {
     const cols = qcCols(), apps = [...new Set(cols.map(c => c.ch))];
     h = '<thead><tr class="r1"><th rowspan="2">NH SKU</th><th rowspan="2" class="lft">Category</th><th rowspan="2">' + (MODE === "bau" ? "BAU" : "Event") + '</th>';
     apps.forEach(a => h += logoTh(a, ' colspan="' + cols.filter(c => c.ch === a).length + '" style="border-left:2px solid var(--line)"'));
-    h += '<th rowspan="2">Mismatch</th></tr><tr class="r2">';
+    h += misTh(' rowspan="2"') + '</tr><tr class="r2">';
     cols.forEach((c, i) => h += '<th class="city' + (i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "") + '" title="' + c.pin + '">' + esc(c.label) + "</th>");
     h += "</tr></thead><tbody>";
     rows.forEach(r => {
