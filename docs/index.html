@@ -656,35 +656,92 @@ function render() {
   t.innerHTML = h + "</tbody>";
 }
 
+// ---- Download: a clean Excel file (numbers stay numbers, one value per cell)
+//   Sheet "Summary"  one row per NH SKU, one price column per channel (lowest price)
+//   Sheet "Details"  one row per NH SKU x channel x city - easy to filter / pivot
+function dlTables() {
+  const lab = MODE === "bau" ? "BAU" : "Event", rows = shown(), qcSet = new Set(DATA.qcApps || []);
+  const num = v => v == null || v === "" ? null : Math.round(v);
+  const pc = (p, al) => p == null || !al ? null : Math.round((p - al) / al * 1000) / 1000;
+  const sumHead = ["NH SKU", "Revenue rank", "Category", "Product", lab + " price"]
+    .concat(DATA.channels, ["Lowest price", "Lowest on", "Channels below", "Channels above", "Channels at par", "Out of stock"]);
+  const sum = [sumHead];
+  const detHead = ["NH SKU", "Revenue rank", "Category", "Product", "Channel", "Type", "City", "Pincode",
+                   "Price", lab + " price", "Difference (Rs)", "Difference %", "Status"];
+  const det = [detHead];
+  const cols = VIEW === "qc" ? qcCols() : null;
+  rows.forEach(r => {
+    const al = num(AL(r)), line = [r.sku, r.rank == null ? null : r.rank, r.cat || "", r.name || "", al];
+    let low = null, lowOn = [], nb = 0, na = 0, np = 0, no = 0;
+    DATA.channels.forEach(ch => {
+      const c = r.cells[ch];
+      if (!c) { line.push(null); return; }
+      if (c[2]) { line.push(null); no++; return; }
+      const p = num(c[0]); line.push(p);
+      if (low == null || p < low) { low = p; lowOn = [ch]; } else if (p === low) lowOn.push(ch);
+      const st = cellState(r, c); if (st === "low") nb++; else if (st === "high") na++; else if (st === "ok") np++;
+    });
+    sum.push(line.concat([low, lowOn.join(", "), nb, na, np, no]));
+    const add = (ch, city, pin, price, oos) => {
+      const p = num(price), st = stateOf(price, price, oos, AL(r));
+      det.push([r.sku, r.rank == null ? null : r.rank, r.cat || "", r.name || "", ch, qcSet.has(ch) ? "QC" : "Marketplace",
+                city, pin, oos ? null : p, al, oos || al == null || p == null ? null : p - al, oos ? null : pc(p, al), STATE[st]]);
+    };
+    DATA.channels.forEach(ch => {
+      if (qcSet.has(ch)) {
+        (DATA.pins || []).forEach(pn => {
+          if (cols && !cols.some(x => x.ch === ch && x.pin === pn.pin)) return;
+          const v = (r.qc[ch] || {})[pn.pin]; if (v) add(ch, pn.city || "", pn.pin, v[0], v[1]);
+        });
+      } else if (!cols) {
+        const c = r.cells[ch]; if (c) add(ch, "All India", "", c[0], c[2]);
+      }
+    });
+  });
+  return {sum, det, lab};
+}
+function loadXLSX() {
+  return new Promise((ok, bad) => {
+    if (window.XLSX) return ok(window.XLSX);
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    sc.onload = () => ok(window.XLSX); sc.onerror = bad; document.head.appendChild(sc);
+  });
+}
 function download() {
-  const q = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
-  const rows = shown(), lines = [];
-  if (VIEW === "all") {
-    const head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU SP" : "Event SP")];
-    DATA.channels.forEach(c => head.push(c + " Price", c + " Status"));
-    head.push("Channels mismatched");
-    lines.push(head.map(q).join(","));
-    rows.forEach(r => {
-      const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
-      DATA.channels.forEach(ch => { const c = r.cells[ch];
-        row.push(!c ? "" : (R0(c[0]) === R0(c[1]) ? R0(c[0]) : R0(c[0]) + "-" + R0(c[1])), !c ? "Not listed" : STATE[cellState(r, c)]); });
-      row.push(r.bad); lines.push(row.map(q).join(","));
-    });
-  } else {
-    const cols = qcCols(), head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU SP" : "Event SP")];
-    cols.forEach(c => head.push(c.ch + " " + c.label + " " + c.pin + " Price", c.ch + " " + c.label + " " + c.pin + " Status"));
-    head.push("Mismatches"); lines.push(head.map(q).join(","));
-    rows.forEach(r => {
-      const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
-      cols.forEach(c => { const v = (r.qc[c.ch] || {})[c.pin]; row.push(v ? R0(v[0]) : "", v ? STATE[qcState(r, v)] : "Not listed"); });
-      row.push(r.bad); lines.push(row.map(q).join(","));
-    });
-  }
-  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "NH_Price_War_" + (VIEW === "qc" ? "QC_citywise_" : "") + MODE.toUpperCase() + "_" + (DATA.updated || "").replace(/[: ]/g, "-") + ".csv";
-  document.body.appendChild(a); a.click(); a.remove();
+  const {sum, det, lab} = dlTables();
+  const name = "NH_Price_War_" + (VIEW === "qc" ? "QC_citywise_" : "") + lab + "_" + (DATA.updated || "").replace(/[: ]/g, "-");
+  loadXLSX().then(X => {
+    const wb = X.utils.book_new();
+    const sheet = (aoa, widths, money, pcts) => {
+      const ws = X.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = widths.map(w => ({wch: w}));
+      ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: 0, c: 0}, e: {r: aoa.length - 1, c: aoa[0].length - 1}})};
+      for (let i = 1; i < aoa.length; i++) {
+        money.forEach(c => { const a = ws[X.utils.encode_cell({r: i, c})]; if (a && a.t === "n") a.z = '"₹"#,##0;-"₹"#,##0'; });
+        pcts.forEach(c => { const a = ws[X.utils.encode_cell({r: i, c})]; if (a && a.t === "n") a.z = "0%"; });
+      }
+      return ws;
+    };
+    const n = DATA.channels.length, money = [4].concat(DATA.channels.map((_, i) => 5 + i), [5 + n]);
+    X.utils.book_append_sheet(wb, sheet(sum, [16, 8, 16, 38, 11].concat(DATA.channels.map(() => 11), [12, 20, 10, 10, 10, 10]), money, []), "Summary");
+    X.utils.book_append_sheet(wb, sheet(det, [16, 8, 16, 38, 12, 12, 12, 9, 9, 11, 14, 12, 16], [8, 9, 10], [11]), "Details");
+    const how = [["How to read this file"], [""],
+      ["Summary", "One row per NH SKU. Each channel column = lowest selling price now (blank = not listed or out of stock)."],
+      ["Details", "One row per NH SKU x channel x city. Use filters / pivot on it."],
+      ["Difference (Rs)", "Price minus " + lab + " price. Negative = cheaper than " + lab + "."],
+      ["Difference %", "Difference as a % of the " + lab + " price."],
+      ["Status", "Below / Above / At par (within Rs " + TOL + ") / Out of stock"],
+      ["Data as of", DATA.updated || ""]];
+    const hw = X.utils.aoa_to_sheet(how); hw["!cols"] = [{wch: 16}, {wch: 100}];
+    X.utils.book_append_sheet(wb, hw, "How to read");
+    X.writeFile(wb, name + ".xlsx");
+  }).catch(() => {                                  // no internet: plain CSV of the Details sheet
+    const q = v => v == null ? "" : (typeof v === "number" ? String(v) : '"' + String(v).replace(/"/g, '""') + '"');
+    const blob = new Blob(["﻿" + det.map(r => r.map(q).join(",")).join("\r\n")], {type: "text/csv;charset=utf-8"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
 }
 $("dl").onclick = download;
 setupFilters();
