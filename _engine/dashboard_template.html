@@ -50,6 +50,17 @@
   td.al { color: var(--muted); }
   td.low { background: var(--low-bg); color: var(--low-tx); font-weight: 600; }
   td.high { background: var(--high-bg); color: var(--high-tx); font-weight: 600; }
+  .low1 { background: #fde8e7 !important; color: #a4161a !important; }
+  .low2 { background: #f9c3bf !important; color: #8f1317 !important; }
+  .low3 { background: #f08a83 !important; color: #5c0b0e !important; }
+  .low4 { background: #d63a31 !important; color: #ffffff !important; }
+  .high1 { background: #fff4d6 !important; color: #7a5200 !important; }
+  .high2 { background: #ffe29a !important; color: #6b4700 !important; }
+  .high3 { background: #ffc24d !important; color: #4d3300 !important; }
+  .high4 { background: #f08c00 !important; color: #ffffff !important; }
+  td.low1, td.low2, td.low3, td.low4, td.high1, td.high2, td.high3, td.high4 { font-weight: 600; }
+  .scale { display: inline-flex; gap: 2px; margin-left: 4px; }
+  .scale i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
   td.oos { color: var(--oos-tx); }
   td.none { color: var(--oos-tx); }
   td.cnt { font-weight: 600; }
@@ -156,8 +167,8 @@
   <div class="meta" id="meta"></div>
   <div class="right">
   <div class="legend">
-    <span><i class="sw" style="background:var(--low-bg)"></i>Below aligned</span>
-    <span><i class="sw" style="background:var(--high-bg)"></i>Above aligned</span>
+    <span title="Darker = bigger gap from the Event/BAU price: up to 5%, 5-10%, 10-20%, over 20%">Below <span class="scale"><i class="low1"></i><i class="low2"></i><i class="low3"></i><i class="low4"></i></span></span>
+    <span title="Darker = bigger gap from the Event/BAU price: up to 5%, 5-10%, 10-20%, over 20%">Above <span class="scale"><i class="high1"></i><i class="high2"></i><i class="high3"></i><i class="high4"></i></span></span>
     <span style="color:var(--oos-tx)">OOS = out of stock</span>
   </div>
   <button id="dl">Download data</button>
@@ -165,18 +176,18 @@
 </header>
 <nav class="tabs">
   <button class="tab on" data-v="all">All channels</button>
-  <button class="tab" data-v="qc">Quick commerce &middot; city wise</button>
+  <button class="tab" data-v="qc">QC &middot; city wise</button>
 </nav>
 <div class="filters">
-  <span class="seg" title="Which aligned price the colours compare against">Compare with
-    <button class="sg on" data-m="event">Event aligned</button><button class="sg" data-m="bau">BAU aligned</button></span>
+  <span class="seg" title="Which price list the colours compare against">Compare with
+    <button class="sg on" data-m="event">Event</button><button class="sg" data-m="bau">BAU</button></span>
   <label>SKUs <select id="fpri"><option value="80">80% revenue SKUs</option><option value="50">Top 50 revenue</option><option value="all">All SKUs</option></select></label>
   <label>Category <select id="fcat"><option value="">All categories</option></select></label>
   <label>NH SKU <input id="fsku" list="skulist" placeholder="Type or pick an NH SKU"></label>
   <datalist id="skulist"></datalist>
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
-  <label>Sort by <select id="fsort"><option value="">Most not-aligned</option></select></label>
+  <label>Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
   <button class="clear" id="fclear">Clear</button>
   <span id="count"></span>
 </div>
@@ -201,14 +212,23 @@ const cellState = (r, c) => stateOf(c[0], c[1], c[2], AL(r));
 const qcState = (r, v) => stateOf(v[0], v[0], v[1], AL(r));
 const cellText = c => !c ? "\u2013" : (c[2] ? "OOS" : (R0(c[0]) === R0(c[1]) ? rs(c[0]) : rs(c[0]) + "\u2013" + R0(c[1])));
 const OFF = s => s === "low" || s === "high";
-const STATE = {low: "Below aligned", high: "Above aligned", oos: "Out of stock", ok: "At par", na: "No aligned price"};
+const STATE = {low: "Below", high: "Above", oos: "Out of stock", ok: "At par", na: "No Event/BAU price"};
+// how far from the Event/BAU price, as a share of it -> colour step 1..4
+function grade(lo, hi, oos, al) {
+  const st = stateOf(lo, hi, oos, al);
+  if (st !== "low" && st !== "high") return st === "oos" ? "oos" : "";
+  const gap = st === "low" ? (al - lo) / al : (hi - al) / al;
+  const step = gap < 0.05 ? 1 : gap < 0.10 ? 2 : gap < 0.20 ? 3 : 4;
+  return st + " " + st + step;
+}
+const gapTxt = (p, al) => al ? " (" + (p >= al ? "+" : "") + Math.round((p - al) / al * 100) + "% vs " + (MODE === "bau" ? "BAU" : "Event") + ")" : "";
 function esc(s) { return String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
 function rkb(r) { return r.rank == null ? "" : ' <span class="rk' + (r.tier === "Top 50" ? " t50" : "") + '" title="October revenue rank">#' + r.rank + "</span>"; }
 function cls(st) { return st === "low" || st === "high" || st === "oos" ? st : ""; }
 function logoTh(c, extra) {
   const L = DATA.logos || {};
   const on = SORTCH === c ? " sorted" : "";
-  const tip = ' title="' + esc(c) + ' \u2013 click to sort by ' + esc(c) + ' sales and not-aligned (click again to undo)"';
+  const tip = ' title="' + esc(c) + ' \u2013 click to sort by ' + esc(c) + ' sales and mismatches (click again to undo)"';
   const inner = L[c] ? '<span class="lg"><img src="' + L[c] + '" alt="' + esc(c) + '"></span>' : esc(c);
   return '<th class="logo sortable' + on + '" data-ch="' + esc(c) + '"' + extra + tip + ">" + inner +
          (on ? '<span class="arrow">\u25BC</span>' : "") + "</th>";
@@ -256,7 +276,7 @@ function setupFilters() {
   $("fapp").innerHTML += (DATA.qcApps || []).map(a => "<option>" + esc(a) + "</option>").join("");
   $("fcity").innerHTML += (DATA.pins || []).map(p => '<option value="' + p.pin + '">' + esc((p.city || "") + " " + p.pin) + "</option>").join("");
   ["fcat", "fapp", "fcity", "fpri"].forEach(id => $(id).onchange = render);
-  $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & not aligned</option>").join("");
+  $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & mismatch</option>").join("");
   $("fsort").onchange = () => { SORTCH = $("fsort").value; render(); };
   $("t").addEventListener("click", e => {
     const th = e.target.closest("th[data-ch]");
@@ -287,12 +307,12 @@ function renderCards(rows) {
   const shown = rows.slice(0, 300);
   shown.forEach(r => {
     h += '<div class="card"><div class="top"><span class="sku">' + esc(r.sku) + rkb(r) + "</span>" +
-         (r.bad ? '<span class="bad">' + r.bad + " not aligned</span>" : "") + "</div>" +
-         '<div class="sub">' + esc(r.cat || "") + (r.cat ? " \u00B7 " : "") + "Aligned " + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</div>";
+         (r.bad ? '<span class="bad">' + r.bad + (r.bad > 1 ? " mismatches" : " mismatch") + "</span>" : "") + "</div>" +
+         '<div class="sub">' + esc(r.cat || "") + (r.cat ? " \u00B7 " : "") + (MODE === "bau" ? "BAU " : "Event ") + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</div>";
     if (VIEW === "all") {
       h += '<div class="chips">';
       DATA.channels.forEach(ch => { const c = r.cells[ch]; if (!c) return;
-        h += '<span class="chip ' + cls(cellState(r, c)) + '" title="' + esc(c[3]) + '">' + logoImg(ch) + cellText(c) + "</span>"; });
+        h += '<span class="chip ' + grade(c[0], c[1], c[2], AL(r)) + '" title="' + esc(c[3]) + '">' + logoImg(ch) + cellText(c) + "</span>"; });
       h += "</div>";
     } else {
       const cols = qcCols();
@@ -301,7 +321,7 @@ function renderCards(rows) {
         if (!cs.length) return;
         h += '<div class="app">' + logoImg(a) + esc(a) + '</div><div class="chips">';
         cs.forEach(c => { const v = r.qc[a][c.pin];
-          h += '<span class="chip ' + cls(qcState(r, v)) + '">' + esc(c.label) + " " + (v[1] ? "OOS" : rs(v[0])) + "</span>"; });
+          h += '<span class="chip ' + grade(v[0], v[0], v[1], AL(r)) + '">' + esc(c.label) + " " + (v[1] ? "OOS" : rs(v[0])) + "</span>"; });
         h += "</div>";
       });
     }
@@ -314,30 +334,30 @@ function renderCards(rows) {
 function render() {
   const t = $("t");
   if (!DATA || !DATA.rows.length) { t.innerHTML = "<tr><td>No prices yet - run the tracker first.</td></tr>"; return; }
-  const lab = MODE === "bau" ? (DATA.bauLabel || "BAU aligned") : (DATA.eventLabel || "Event aligned");
+  const lab = MODE === "bau" ? "BAU" : "Event";
   $("meta").textContent = "Updated " + DATA.updated + "  \u00B7  Comparing with: " + lab;
   const rows = shown();
   $("count").textContent = "Showing " + rows.length + " SKUs";
   if (MOBILE()) { renderCards(rows); return; }
   let h = "";
   if (VIEW === "all") {
-    h = '<thead><tr><th>NH SKU</th><th class="lft">Category</th><th>Aligned</th>';
+    h = '<thead><tr><th>NH SKU</th><th class="lft">Category</th><th>' + (MODE === "bau" ? "BAU" : "Event") + '</th>';
     DATA.channels.forEach(c => h += logoTh(c, ""));
-    h += "<th>Not aligned</th></tr></thead><tbody>";
+    h += "<th>Mismatch</th></tr></thead><tbody>";
     rows.forEach(r => {
       h += '<tr><td title="' + esc(r.name) + '">' + esc(r.sku) + rkb(r) + '</td><td class="cat">' + esc(r.cat || "") +
            '</td><td class="al">' + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</td>";
       DATA.channels.forEach(ch => {
         const c = r.cells[ch];
-        h += '<td class="' + (!c ? "none" : cls(cellState(r, c))) + '"' + (c ? ' title="' + esc(c[3]) + '"' : "") + ">" + cellText(c) + "</td>";
+        h += '<td class="' + (!c ? "none" : grade(c[0], c[1], c[2], AL(r))) + '"' + (c ? ' title="' + esc(c[3] + (c[2] ? "" : gapTxt(c[1] > (AL(r) || 0) ? c[1] : c[0], AL(r)))) + '"' : "") + ">" + cellText(c) + "</td>";
       });
       h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
     });
   } else {
     const cols = qcCols(), apps = [...new Set(cols.map(c => c.ch))];
-    h = '<thead><tr class="r1"><th rowspan="2">NH SKU</th><th rowspan="2" class="lft">Category</th><th rowspan="2">Aligned</th>';
+    h = '<thead><tr class="r1"><th rowspan="2">NH SKU</th><th rowspan="2" class="lft">Category</th><th rowspan="2">' + (MODE === "bau" ? "BAU" : "Event") + '</th>';
     apps.forEach(a => h += logoTh(a, ' colspan="' + cols.filter(c => c.ch === a).length + '" style="border-left:2px solid var(--line)"'));
-    h += '<th rowspan="2">Not aligned</th></tr><tr class="r2">';
+    h += '<th rowspan="2">Mismatch</th></tr><tr class="r2">';
     cols.forEach((c, i) => h += '<th class="city' + (i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "") + '" title="' + c.pin + '">' + esc(c.label) + "</th>");
     h += "</tr></thead><tbody>";
     rows.forEach(r => {
@@ -346,7 +366,7 @@ function render() {
       cols.forEach((c, i) => {
         const v = (r.qc[c.ch] || {})[c.pin];
         const gl = i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "";
-        h += '<td class="' + (!v ? "none" : cls(qcState(r, v))) + gl + '" title="' + esc(c.ch + " \u00B7 " + c.label + " " + c.pin) + '">' +
+        h += '<td class="' + (!v ? "none" : grade(v[0], v[0], v[1], AL(r))) + gl + '" title="' + esc(c.ch + " \u00B7 " + c.label + " " + c.pin + (v && !v[1] ? gapTxt(v[0], AL(r)) : "")) + '">' +
              (!v ? "\u2013" : v[1] ? "OOS" : rs(v[0])) + "</td>";
       });
       h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
@@ -359,9 +379,9 @@ function download() {
   const q = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
   const rows = shown(), lines = [];
   if (VIEW === "all") {
-    const head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU" : "Event") + " Aligned SP"];
+    const head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU SP" : "Event SP")];
     DATA.channels.forEach(c => head.push(c + " Price", c + " Status"));
-    head.push("Channels not aligned");
+    head.push("Channels mismatched");
     lines.push(head.map(q).join(","));
     rows.forEach(r => {
       const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
@@ -370,9 +390,9 @@ function download() {
       row.push(r.bad); lines.push(row.map(q).join(","));
     });
   } else {
-    const cols = qcCols(), head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU" : "Event") + " Aligned SP"];
+    const cols = qcCols(), head = ["NH SKU", "Revenue rank", "Category", "Product", (MODE === "bau" ? "BAU SP" : "Event SP")];
     cols.forEach(c => head.push(c.ch + " " + c.label + " " + c.pin + " Price", c.ch + " " + c.label + " " + c.pin + " Status"));
-    head.push("Not aligned"); lines.push(head.map(q).join(","));
+    head.push("Mismatches"); lines.push(head.map(q).join(","));
     rows.forEach(r => {
       const row = [r.sku, r.rank, r.cat, r.name, R0(AL(r))];
       cols.forEach(c => { const v = (r.qc[c.ch] || {})[c.pin]; row.push(v ? R0(v[0]) : "", v ? STATE[qcState(r, v)] : "Not listed"); });
