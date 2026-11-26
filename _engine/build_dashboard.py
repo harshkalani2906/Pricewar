@@ -226,6 +226,16 @@ def build(log=print, aligned_label="", tolerance=1.0):
     os.makedirs(DASH_DIR, exist_ok=True)
     with open(os.path.join(DASH_DIR, "price-pulse.html"), "w", encoding="utf-8") as fh:
         fh.write(page)
+    # GitHub Pages copy: https://<user>.github.io/<repo>/  (Settings -> Pages -> main, /docs)
+    docs = os.path.join(ROOT, "docs")
+    os.makedirs(docs, exist_ok=True)
+    with open(os.path.join(docs, "index.html"), "w", encoding="utf-8") as fh:
+        fh.write(page)
+    open(os.path.join(docs, ".nojekyll"), "w").close()
+    # same page at the top of the repository, so GitHub Pages works with "/ (root)" too
+    with open(os.path.join(ROOT, "index.html"), "w", encoding="utf-8") as fh:
+        fh.write(page)
+    open(os.path.join(ROOT, ".nojekyll"), "w").close()
     log(f"Dashboard rebuilt: {len(out)} SKUs x {len(chans)} channels -> 3_Dashboard\\price-pulse.html")
     try:
         import push_github

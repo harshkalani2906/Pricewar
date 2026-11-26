@@ -12,3 +12,6 @@ _old_inputs/
 _old_dashboard/
 # Excel lock files
 ~$*
+# Business data stays on the laptop (repository is public for the dashboard link)
+1_Input/
+QC website ids to confirm.xlsx
