@@ -33,6 +33,7 @@ import datetime as dt
 import glob
 import json
 import os
+import shutil
 import re
 import sys
 import time
@@ -182,8 +183,18 @@ def read_products():
 # --------------------------------------------------------------------------
 # Browser
 # --------------------------------------------------------------------------
+# Apps read as a GUEST (never logged in). Instamart prices are cohort based: a logged-in
+# account can see its own special price, so we always read the normal guest price.
+# A fresh empty browser profile is used on every run - no login, no old cookies.
+GUEST = {"instamart"}
+
+
 def open_context(pw, key, show):
-    prof = os.path.join(STATE_DIR, f"{key}_profile")
+    if key in GUEST:
+        prof = os.path.join(STATE_DIR, f"{key}_guest_profile")
+        shutil.rmtree(prof, ignore_errors=True)
+    else:
+        prof = os.path.join(STATE_DIR, f"{key}_profile")
     os.makedirs(prof, exist_ok=True)
     args = ["--disable-blink-features=AutomationControlled", "--lang=en-IN"]
     if not show:
@@ -266,7 +277,7 @@ def resolve_all_geo(pw, pins, show):
 # --------------------------------------------------------------------------
 def run_channel(pw, cls, pins, geo, cities, show, results, ch_status):
     ch = cls()
-    log(f"=== {ch.name}: {len(pins)} pincode(s) ===")
+    log(f"=== {ch.name}: {len(pins)} pincode(s)" + (" - guest, no login" if ch.key in GUEST else "") + " ===")
     ctx, page = open_context(pw, ch.key, show)
     ok_pins = 0
     try:
@@ -566,6 +577,9 @@ def login_window(key):
     url = {"fkminutes": "https://www.flipkart.com/account/login",
            "zepto": "https://www.zepto.com/", "blinkit": "https://blinkit.com/",
            "instamart": "https://www.swiggy.com/instamart", "bigbasket": "https://www.bigbasket.com/"}[key]
+    if key in GUEST:
+        print(f"\n  {cls.name} is always read WITHOUT login (guest price) - no need to log in.")
+        return
     with sync_playwright() as pw:
         ctx, page = open_context(pw, key, show=True)
         page.goto(url)
