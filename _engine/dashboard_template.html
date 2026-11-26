@@ -842,6 +842,29 @@ if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)
   const sc = document.createElement("script"); sc.src = LIB; sc.onload = start; sc.onerror = () => {};
   document.head.appendChild(sc);
 })();
+
+// ---------------- Auto refresh: on the live (GitHub) link, check every 2 minutes for a newer run
+// and reload by itself - the open tab and Event/BAU choice are kept.
+(function () {
+  try {                                                // restore view after an auto reload
+    const k = JSON.parse(sessionStorage.getItem("pw_keep") || "null"); sessionStorage.removeItem("pw_keep");
+    if (k) {
+      if (k.m) { const b = document.querySelector('.sg[data-m="' + k.m + '"]'); if (b) b.click(); }
+      if (k.v) { const t = document.querySelector('.tab[data-v="' + k.v + '"]'); if (t) t.click(); }
+      if (k.y) setTimeout(() => scrollTo(0, k.y), 300);
+    }
+  } catch (e) {}
+  if (!/^https?:/.test(location.protocol) || !DATA) return;
+  setInterval(() => {
+    fetch(location.pathname + "?v=" + Date.now(), {cache: "no-store"}).then(r => r.ok ? r.text() : "").then(t => {
+      const m = t.match(/"updated":\s*"([^"]*)"/);
+      if (m && m[1] && m[1] !== DATA.updated) {
+        try { sessionStorage.setItem("pw_keep", JSON.stringify({v: VIEW, m: MODE, y: scrollY})); } catch (e) {}
+        location.reload();
+      }
+    }).catch(() => {});
+  }, 120000);
+})();
 </script>
 </body>
 </html>
