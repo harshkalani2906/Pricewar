@@ -243,6 +243,36 @@
   @media (prefers-reduced-motion: reduce) { .chron .paper, .ctitle, #history, .hourglass, .hourglass * { animation: none !important; } }
   @media (max-width: 700px) { body.hisview .chron { margin: 0 12px 14px; height: 56px; } .ctitle { font-size: 15px; gap: 8px; letter-spacing: 1px; }
                               .ctitle small { display: none; } body.hisview #history { margin: 0 8px 24px; padding: 12px 10px; } }
+  /* ---------- live viewers + "war has started" banner (shown when more than 3 people have the dashboard open) */
+  .watch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); border: 1px solid var(--line);
+           border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+  .watch .live { width: 8px; height: 8px; border-radius: 50%; background: #22a06b; animation: livepulse 1.6s infinite; }
+  .watch.hot { color: #b3001b; border-color: #f3b6b1; background: #fde8e7; font-weight: 700; } .watch.hot .live { background: #e0182d; }
+  @keyframes livepulse { 0% { box-shadow: 0 0 0 0 rgba(34,160,107,.6); } 100% { box-shadow: 0 0 0 8px rgba(34,160,107,0); } }
+  .warban { position: relative; overflow: hidden; margin: 0 20px 10px; border-radius: 12px; color: #fff; height: 92px;
+            background: linear-gradient(100deg, #5c0010, #b3001b 35%, #e8590c 70%, #5c0010); background-size: 220% 100%;
+            animation: warbg 3s linear infinite, warshake .6s 1; display: flex; align-items: center; justify-content: center; gap: 18px; }
+  .warban[hidden] { display: none; }
+  @keyframes warbg { from { background-position: 0 0; } to { background-position: 220% 0; } }
+  @keyframes warshake { 0%,100% { transform: none; } 15% { transform: translate(-8px,2px) rotate(-.6deg); } 30% { transform: translate(7px,-2px) rotate(.6deg); }
+                        45% { transform: translate(-5px,1px); } 60% { transform: translate(4px,-1px); } 75% { transform: translate(-2px,0); } }
+  .warban .wsw { width: 120px; height: 84px; flex: none; }
+  .warban .wsw .l { transform-origin: 20px 78px; animation: swl 1.2s ease-in-out infinite; }
+  .warban .wsw .r { transform-origin: 100px 78px; animation: swr 1.2s ease-in-out infinite; }
+  @keyframes swl { 0%,100% { transform: rotate(-28deg); } 45% { transform: rotate(14deg); } 55% { transform: rotate(10deg); } }
+  @keyframes swr { 0%,100% { transform: rotate(28deg); } 45% { transform: rotate(-14deg); } 55% { transform: rotate(-10deg); } }
+  .warban .spark { transform-origin: 60px 30px; animation: spark 1.2s ease-out infinite; opacity: 0; }
+  @keyframes spark { 0%,40% { opacity: 0; transform: scale(.2); } 46% { opacity: 1; transform: scale(1.3); } 70%,100% { opacity: 0; transform: scale(.6); } }
+  .warban .wtxt { text-align: center; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .warban .wtxt b { display: block; font-size: 28px; font-weight: 900; letter-spacing: 4px; animation: wpop 1.2s ease-in-out infinite; }
+  .warban .wtxt span { font-size: 13px; opacity: .95; }
+  @keyframes wpop { 0%,40%,100% { transform: scale(1); } 46% { transform: scale(1.08); } }
+  .warban .wx { position: absolute; top: 6px; right: 10px; background: none; border: 0; color: #fff; font-size: 20px; cursor: pointer; opacity: .8; }
+  .ember { position: absolute; bottom: -6px; width: 5px; height: 5px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 6px #ffb347; animation: ember 2.6s linear infinite; }
+  @keyframes ember { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100px) translateX(14px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .warban, .warban * { animation: none !important; } .warban .spark { opacity: 1; } }
+  @media (max-width: 700px) { .warban { margin: 0 8px 8px; height: 78px; gap: 6px; } .warban .wsw { width: 70px; height: 50px; }
+                              .warban .wtxt b { font-size: 18px; letter-spacing: 2px; } .warban .wtxt span { font-size: 11px; } }
 </style>
 </head>
 <body>
@@ -293,9 +323,27 @@
     <span title="Darker = bigger gap from the Event/BAU price: up to 5%, 5-10%, 10-20%, over 20%">Above <span class="scale"><i class="high1"></i><i class="high2"></i><i class="high3"></i><i class="high4"></i></span></span>
     <span style="color:var(--oos-tx)">OOS = out of stock</span>
   </div>
+  <span id="watch" class="watch" hidden title="People who have this dashboard open right now"><i class="live"></i><b id="wn">1</b> watching</span>
   <button id="dl">Download data</button>
   </div>
 </header>
+<div id="warban" class="warban" hidden role="status">
+  <svg class="wsw" viewBox="0 0 120 84" aria-hidden="true">
+    <g class="l"><g transform="translate(18,62) rotate(28)"><path d="M0 0 L4 -62 L7 -56 L5 0 Z" fill="#eef1f4" stroke="#9aa3ad" stroke-width=".8"/><ellipse cx="2.5" cy="1" rx="8" ry="2.6" fill="#ffd23f"/><rect x="0" y="3" width="5" height="20" rx="1.5" fill="#1d1d1f"/></g></g>
+    <g class="r"><g transform="translate(102,62) rotate(-28) scale(-1,1)"><path d="M0 0 L4 -62 L7 -56 L5 0 Z" fill="#eef1f4" stroke="#9aa3ad" stroke-width=".8"/><ellipse cx="2.5" cy="1" rx="8" ry="2.6" fill="#ffd23f"/><rect x="0" y="3" width="5" height="20" rx="1.5" fill="#1d1d1f"/></g></g>
+    <g class="spark"><path d="M60 16 L63 27 L74 30 L63 33 L60 44 L57 33 L46 30 L57 27 Z" fill="#ffd23f"/><circle cx="60" cy="30" r="3.5" fill="#fff"/></g>
+  </svg>
+  <div class="wtxt"><b>PRICE WAR HAS STARTED</b><span id="wmsg">everyone is watching</span></div>
+  <svg class="wsw" viewBox="0 0 120 84" aria-hidden="true" style="transform:scaleX(-1)">
+    <g class="l"><g transform="translate(18,62) rotate(28)"><path d="M0 0 L4 -62 L7 -56 L5 0 Z" fill="#eef1f4" stroke="#9aa3ad" stroke-width=".8"/><ellipse cx="2.5" cy="1" rx="8" ry="2.6" fill="#ffd23f"/><rect x="0" y="3" width="5" height="20" rx="1.5" fill="#1d1d1f"/></g></g>
+    <g class="r"><g transform="translate(102,62) rotate(-28) scale(-1,1)"><path d="M0 0 L4 -62 L7 -56 L5 0 Z" fill="#eef1f4" stroke="#9aa3ad" stroke-width=".8"/><ellipse cx="2.5" cy="1" rx="8" ry="2.6" fill="#ffd23f"/><rect x="0" y="3" width="5" height="20" rx="1.5" fill="#1d1d1f"/></g></g>
+    <g class="spark"><path d="M60 16 L63 27 L74 30 L63 33 L60 44 L57 33 L46 30 L57 27 Z" fill="#ffd23f"/><circle cx="60" cy="30" r="3.5" fill="#fff"/></g>
+  </svg>
+  <i class="ember" style="left:12%;animation-delay:0s"></i><i class="ember" style="left:28%;animation-delay:.9s"></i>
+  <i class="ember" style="left:47%;animation-delay:1.7s"></i><i class="ember" style="left:66%;animation-delay:.4s"></i>
+  <i class="ember" style="left:83%;animation-delay:1.3s"></i><i class="ember" style="left:93%;animation-delay:2.1s"></i>
+  <button class="wx" id="wx" title="Hide">&times;</button>
+</div>
 <nav class="tabs">
   <button class="tab on" data-v="all">All channels</button>
   <button class="tab" data-v="qc">QC &middot; city wise</button>
@@ -750,6 +798,50 @@ window.matchMedia("(max-width: 700px)").addEventListener("change", render);
 if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) {
   const k = $("katanas"); k.pauseAnimations(); k.setCurrentTime(1.2);
 }
+
+// ---------------- Live viewers. Every open dashboard sends a small "I am watching" ping (a random id,
+// nothing else) through a free public message server. When MORE THAN 3 people have it open at the
+// same time, the "PRICE WAR HAS STARTED" banner plays for everyone.
+(function () {
+  const WAR_AT = 4;                                   // more than 3 people
+  const TOPIC = "nathabit/pricewar-7f3k2q/watching";
+  const BROKER = new URLSearchParams(location.search).get("broker") || "wss://broker.hivemq.com:8884/mqtt";
+  const LIB = "https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
+  const me = Math.random().toString(36).slice(2, 10), seen = {}, ttl = 40000;
+  let hidden = false, last = 0;
+  function show() {
+    const now = Date.now();
+    Object.keys(seen).forEach(k => { if (now - seen[k] > ttl) delete seen[k]; });
+    seen[me] = now;
+    const n = Object.keys(seen).length, w = $("watch");
+    w.hidden = false; $("wn").textContent = n; w.classList.toggle("hot", n >= WAR_AT);
+    const war = n >= WAR_AT;
+    if (war && n > last) hidden = false;               // someone new joined -> show again
+    $("wmsg").textContent = n + " people are watching the prices right now";
+    $("warban").hidden = !war || hidden;
+    last = n;
+  }
+  $("wx").onclick = () => { hidden = true; show(); };
+  function start() {
+    let c;
+    try {
+      c = mqtt.connect(BROKER, {clientId: "pw_" + me, clean: true, reconnectPeriod: 5000, connectTimeout: 10000,
+                                will: {topic: TOPIC, payload: JSON.stringify({id: me, bye: 1}), qos: 0, retain: false}});
+    } catch (e) { return; }
+    const ping = () => c.connected && c.publish(TOPIC, JSON.stringify({id: me}));
+    c.on("connect", () => { c.subscribe(TOPIC, () => ping()); });
+    c.on("message", (t, m) => {
+      try { const d = JSON.parse(m.toString()); if (!d.id || d.id === me) return;
+            if (d.bye) delete seen[d.id]; else { const isNew = !seen[d.id]; seen[d.id] = Date.now(); if (isNew) ping(); }
+            show(); } catch (e) {}
+    });
+    setInterval(() => { ping(); show(); }, 15000);
+    addEventListener("pagehide", () => { try { c.publish(TOPIC, JSON.stringify({id: me, bye: 1})); c.end(true); } catch (e) {} });
+    show();
+  }
+  const sc = document.createElement("script"); sc.src = LIB; sc.onload = start; sc.onerror = () => {};
+  document.head.appendChild(sc);
+})();
 </script>
 </body>
 </html>
