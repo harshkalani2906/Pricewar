@@ -122,7 +122,7 @@
   th.sorted { box-shadow: inset 0 -3px 0 var(--text); }
   th .arrow { display: block; font-size: 9px; line-height: 10px; color: var(--text); }
   .blood, #culprits { display: none; }
-  body.culview .blood { display: block; } body.culview #culprits { display: grid; }
+  body.culview .blood { display: block; } body.culview #culprits { display: block; }
   body.culview .wrap, body.culview #cards { display: none !important; }
   body.culview .qconly2 { display: none !important; }
   .culprit-tab.on { color: #b3001b; border-bottom-color: #b3001b; }
@@ -139,7 +139,21 @@
   @keyframes drip { 0% { height: 0; } 55% { height: 22px; } 70% { height: 26px; } 100% { height: 0; } }
   @keyframes drop { 0%, 60% { opacity: 0; transform: translateY(0); } 65% { opacity: 1; } 100% { opacity: 0; transform: translateY(46px); } }
   @media (prefers-reduced-motion: reduce) { .drip, .drip::after { animation: none; height: 16px; } }
-  #culprits { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; padding: 0 20px 30px; }
+  #culprits { padding: 0 20px 30px; overflow-x: auto; }
+  .ctab { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1100px; }
+  .ctab th { position: static; background: var(--head); font-size: 12px; }
+  .ctab th, .ctab td { padding: 8px 10px; vertical-align: middle; text-align: center; white-space: normal; }
+  .ctab th:first-child, .ctab td:first-child { position: static; }
+  .ctab .lft { text-align: left; }
+  .ctab tr:hover td { background: var(--head); filter: none; }
+  .ctab small { color: var(--muted); font-size: 11px; font-weight: 500; }
+  .ctab .red { color: #b3001b; font-size: 15px; }
+  .ctab .muted { color: var(--muted); font-size: 12px; }
+  .mi { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; margin: 2px 2px 2px 0; white-space: nowrap; }
+  .mi img { height: 18px; width: auto; max-width: 38px; border-radius: 3px; background: #fff; }
+  .culc { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+  .culc .mi { border-color: #f3b6b1; background: #fde8e7; }
+  .culc .mi b { color: #b3001b; }
   .war { border: 1px solid var(--line); border-left: 5px solid #b3001b; border-radius: 10px; padding: 14px 16px; background: var(--bg); }
   .war .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .war .sku { font-weight: 800; font-size: 15px; }
@@ -158,8 +172,11 @@
   .tag { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--head); color: var(--muted); }
   .tag.m { background: #fde8e7; color: #b3001b; }
   .empty { color: var(--muted); padding: 20px; }
-  @media (max-width: 700px) { #culprits { grid-template-columns: 1fr; padding: 0 12px 24px; } .blood { margin: 0 12px 34px; }
+  @media (max-width: 700px) { #culprits { padding: 0 12px 24px; } .blood { margin: 0 12px 34px; }
                               .blood-title { font-size: 18px; padding: 0 14px; } .blood-title small { display: none; } }
+  .culonly { display: none !important; } body.culview .culonly { display: inline-flex !important; }
+  .culonly input { min-width: 0 !important; flex: none !important; }
+  .ctab td:nth-child(2) { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -228,6 +245,7 @@
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
   <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option></select></label>
+  <label class="culonly"><input type="checkbox" id="fwar"> Only price wars</label>
   <button class="clear" id="fclear">Clear</button>
   <span id="count"></span>
 </div>
@@ -325,6 +343,7 @@ function setupFilters() {
   $("fcity").innerHTML += (DATA.pins || []).map(p => '<option value="' + p.pin + '">' + esc((p.city || "") + " " + p.pin) + "</option>").join("");
   ["fcat", "fapp", "fcity", "fpri"].forEach(id => $(id).onchange = render);
   $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & mismatch</option>").join("");
+  $("fwar").onchange = render;
   $("fsort").onchange = () => { SORTCH = $("fsort").value; render(); };
   $("t").addEventListener("click", e => {
     const th = e.target.closest("th[data-ch]");
@@ -385,60 +404,68 @@ const when = t => { const m = String(t).match(/^(\d{4})-(\d\d)-(\d\d) (\d\d:\d\d
   return m ? (+m[3]) + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m[2] - 1] + " " + m[4] : t; };
 const FIRST = (() => { let f = ""; (DATA && DATA.rows || []).forEach(r => Object.values(r.hist || {}).forEach(p =>
   { if (p.length && (!f || p[0][0] < f)) f = p[0][0]; })); return f; })();
+// Culprit rule (Harsh): the culprit is NOT simply the cheapest channel. It is the channel that
+// started the price the MAJORITY of channels ended up matching. A channel that is cheaper on its
+// own (nobody matches it - e.g. FirstCry often) is shown as "alone below", not as the culprit.
+function sinceAtOrBelow(pts, level) {               // start of the current streak at <= level
+  if (!pts.length) return {t: DATA.updated, start: true};
+  let i = pts.length - 1;
+  while (i > 0 && pts[i - 1][1] <= level + TOL) i--;
+  return {t: pts[i][0], start: i === 0 && pts[0][0] <= FIRST, city: pts[pts.length - 1][2] || ""};
+}
 function war(r) {
   const al = AL(r); if (al == null) return null;
   const below = [], hold = [];
   Object.keys(r.cells).forEach(ch => {
-    const c = r.cells[ch]; if (!c || c[2]) return;          // not listed / out of stock now
-    const pts = (r.hist || {})[ch] || [];
-    if (c[0] < al - TOL) {
-      let i = pts.length - 1;
-      while (i > 0 && pts[i - 1][1] < al - TOL) i--;
-      const since = pts.length ? pts[Math.max(i, 0)][0] : DATA.updated;
-      const city = pts.length ? pts[pts.length - 1][2] : "";
-      below.push({ch, p: c[0], since, city, start: !pts.length || (i <= 0 && pts[0][0] <= FIRST)});
-    } else hold.push({ch, p: c[0]});
+    const c = r.cells[ch]; if (!c || c[2]) return;        // not listed / out of stock now
+    (c[0] < al - TOL ? below : hold).push({ch, p: c[0]});
   });
   if (!below.length) return null;
-  below.sort((a, b) => a.since.localeCompare(b.since) || a.p - b.p || ((r.cr || {})[a.ch] || 1e9) - ((r.cr || {})[b.ch] || 1e9));
-  const c0 = below[0];
-  return {al, cul: c0, fol: below.slice(1), hold, gap: (al - c0.p) / al};
+  // group channels selling at (almost) the same price: within Rs 1 or 1%
+  below.sort((a, b) => a.p - b.p);
+  const groups = [];
+  below.forEach(x => {
+    const g = groups[groups.length - 1];
+    if (g && x.p - g[g.length - 1].p <= Math.max(TOL, g[0].p * 0.01)) g.push(x); else groups.push([x]);
+  });
+  // the war price = the price level matched by the most channels (tie -> the lower one)
+  let best = groups[0];
+  groups.forEach(g => { if (g.length > best.length) best = g; });
+  if (best.length < 2) {
+    return {al, cul: null, fol: [], alone: below, hold, warP: null, gap: (al - below[0].p) / al};
+  }
+  const level = best[best.length - 1].p;
+  best.forEach(x => Object.assign(x, sinceAtOrBelow(((r.hist || {})[x.ch]) || [], level)));
+  best.sort((a, b) => a.t.localeCompare(b.t) || a.p - b.p || ((r.cr || {})[a.ch] || 1e9) - ((r.cr || {})[b.ch] || 1e9));
+  const alone = below.filter(x => !best.includes(x));
+  return {al, cul: best[0], fol: best.slice(1), alone, hold, warP: best[0].p, gap: (al - level) / al};
 }
 function pct(p, al) { return Math.round((p - al) / al * 100) + "%"; }
+function mini(x, extra) { return '<span class="mi">' + logoImg(x.ch) + "<b>" + rs(x.p) + "</b>" + (extra || "") + "</span>"; }
 function renderCulprits(rows) {
-  const W = rows.map(r => ({r, w: war(r)})).filter(x => x.w);
-  W.sort((a, b) => (b.w.fol.length > 0) - (a.w.fol.length > 0) || b.w.gap - a.w.gap || ((a.r.rank || 1e9) - (b.r.rank || 1e9)));
-  $("count").textContent = W.length + " SKUs in a price war";
+  const W = rows.map(r => ({r, w: war(r)})).filter(x => x.w && (!$("fwar").checked || x.w.cul));
+  // sales salience: biggest October revenue SKUs first
+  W.sort((a, b) => (a.r.rank || 1e9) - (b.r.rank || 1e9) || a.r.sku.localeCompare(b.r.sku));
+  const wars = W.filter(x => x.w.cul).length;
+  $("count").textContent = wars + " SKUs in a price war · " + (W.length - wars) + " with a channel alone below";
   const lab = MODE === "bau" ? "BAU" : "Event";
-  let h = "";
+  let h = '<table class="ctab"><thead><tr><th>#</th><th class="lft">NH SKU</th><th class="lft">Category</th><th>' + lab +
+          '</th><th>War price</th><th class="lft">🩸 Culprit (started it)</th><th class="lft">Followed, in order</th>' +
+          '<th class="lft">Alone below (nobody matched)</th><th class="lft">Holding ' + lab + "</th></tr></thead><tbody>";
   W.forEach(({r, w}) => {
     const c = w.cul;
-    h += '<div class="war"><div class="top"><span class="sku">' + esc(r.sku) + rkb(r) + '</span><span class="tag m">' +
-         (w.fol.length + 1) + " below " + lab + "</span></div>" +
-         '<div class="sub">' + esc(r.cat || "") + (r.cat ? " \u00B7 " : "") + lab + " " + rs(w.al) + "</div>" +
-         '<div class="lbl red">\uD83E\uDE78 Culprit \u2013 went below first</div>' +
-         '<div class="who cul">' + logoImg(c.ch) + "<span><b>" + rs(c.p) + "</b> " + pct(c.p, w.al) +
-         (c.city ? " \u00B7 " + esc(c.city) : "") + '</span><span class="t">' +
-         (c.start ? "already below when tracking started<br>" + when(c.since) : "since " + when(c.since)) + "</span></div>";
-    if (w.fol.length) {
-      h += '<div class="lbl">Followed (in order)</div><div class="fol">';
-      w.fol.forEach(x => {
-        const tag = x.p < c.p - TOL ? '<span class="tag m">went even lower</span>'
-                  : x.p <= c.p + TOL ? '<span class="tag m">matched</span>' : '<span class="tag">below ' + lab + "</span>";
-        h += '<div class="who">' + logoImg(x.ch) + "<span><b>" + rs(x.p) + "</b> " + pct(x.p, w.al) + "</span>" +
-             '<span class="t">' + tag +
-             "<br>" + (x.start ? "from start" : when(x.since)) + "</span></div>";
-      });
-      h += "</div>";
-    }
-    if (w.hold.length) {
-      h += '<div class="lbl">Holding the price</div><div class="fol">';
-      w.hold.forEach(x => { h += '<div class="who">' + logoImg(x.ch) + "<span><b>" + rs(x.p) + "</b></span></div>"; });
-      h += "</div>";
-    }
-    h += "</div>";
+    h += "<tr><td class=\"cnt\">" + (r.rank || "") + '</td><td class="lft"><b>' + esc(r.sku) + "</b></td>" +
+         '<td class="cat">' + esc(r.cat || "") + "</td><td>" + rs(w.al) + "</td>" +
+         "<td>" + (c ? '<b class="red">' + rs(w.warP) + "</b><br><small>" + pct(w.warP, w.al) + "</small>" : "–") + "</td>" +
+         '<td class="lft">' + (c ? '<div class="culc">' + mini(c, c.city ? " <small>" + esc(c.city) + "</small>" : "") +
+           "<small>" + (c.start ? "already at this price when tracking started (" + when(c.t) + ")" : "since " + when(c.t)) +
+           "</small></div>" : '<span class="muted">no price war</span>') + "</td>" +
+         '<td class="lft">' + (w.fol.length ? w.fol.map((x, i) => mini(x, " <small>" + (x.start ? "from start" : when(x.t)) + "</small>")).join(" ") : "–") + "</td>" +
+         '<td class="lft">' + (w.alone.length ? w.alone.map(x => mini(x, " <small>" + pct(x.p, w.al) + "</small>")).join(" ") : "–") + "</td>" +
+         '<td class="lft">' + (w.hold.length ? w.hold.map(x => mini(x)).join(" ") : "–") + "</td></tr>";
   });
-  $("culprits").innerHTML = h || '<div class="empty">No SKU is below the ' + lab + " price on any channel right now.</div>";
+  $("culprits").innerHTML = W.length ? h + "</tbody></table>"
+    : '<div class="empty">No SKU is below the ' + lab + " price on any channel right now.</div>";
 }
 
 function render() {
