@@ -196,6 +196,21 @@ def price_history(rows, cutoff_days=7):
     return out
 
 
+# product page of each channel, from the id (used when a reading has no link saved)
+PAGE = {"Amazon": "https://www.amazon.in/dp/{}", "Flipkart": "https://www.flipkart.com/product/p/itme?pid={}",
+        "Myntra": "https://www.myntra.com/{}", "Nykaa": "https://www.nykaa.com/x/p/{}",
+        "FirstCry": "https://www.firstcry.com/x/x/{}/product-detail", "Blinkit": "https://blinkit.com/prn/x/prid/{}",
+        "Zepto": "https://www.zepto.com/pn/x/pvid/{}", "Instamart": "https://www.swiggy.com/instamart/item/{}",
+        "BigBasket": "https://www.bigbasket.com/pd/{}/", "FK Minutes": "https://www.flipkart.com/product/p/itme?pid={}&marketplace=HYPERLOCAL"}
+
+
+def product_url(channel, cid, url=""):
+    url = (url or "").strip()
+    if url.startswith("http"):
+        return url
+    return PAGE[channel].format(cid) if cid and channel in PAGE else ""
+
+
 def build(log=print, aligned_label="", tolerance=1.0):
     if not os.path.exists(HIST_FILE):
         log("Dashboard: no history yet")
@@ -242,11 +257,12 @@ def build(log=print, aligned_label="", tolerance=1.0):
         if f(r["Aligned SP"]) is not None:
             d["al"] = f(r["Aligned SP"])
         place = "" if r["Pincode"] == "All India" else f"{r['City']} {r['Pincode']}".strip()
+        url = product_url(r["Channel"], r["Channel ID"], r.get("URL"))
         d["ch"].setdefault(r["Channel"], []).append(
-            {"p": sp, "oos": r["Status"] == "Out of stock", "at": place, "t": r["Run Time"][-5:]})
+            {"p": sp, "oos": r["Status"] == "Out of stock", "at": place, "t": r["Run Time"][-5:], "u": url})
         if place:
             d["pc"].setdefault(r["Channel"], {}).setdefault(r["Pincode"], []).append(
-                (sp, r["Status"] == "Out of stock"))
+                (sp, r["Status"] == "Out of stock", url))
 
     ev, bau, ev_label, bau_label = aligned_both()
     out = []
@@ -257,12 +273,14 @@ def build(log=print, aligned_label="", tolerance=1.0):
             prices = [x["p"] for x in (live or lst)]
             tip = "\n".join(f"{x['at'] or 'All India'}: Rs {round(x['p'])}  ({x['t']})" + (" (out of stock)" if x["oos"] else "")
                             for x in lst)
-            cells[ch] = [min(prices), max(prices), not live, tip]
+            best = min(live or lst, key=lambda x: x["p"])
+            cells[ch] = [min(prices), max(prices), not live, tip, best["u"]]
         qc = {}
         for ch, per in d["pc"].items():
             for pin, lst in per.items():
                 live = [x[0] for x in lst if not x[1]]
-                qc.setdefault(ch, {})[pin] = [min(live) if live else min(x[0] for x in lst), not live]
+                best = min([x for x in lst if not x[1]] or lst, key=lambda x: x[0])
+                qc.setdefault(ch, {})[pin] = [best[0], not live, best[2]]
         sku = d["sku"]
         out.append({"sku": sku, "name": d["name"], "cells": cells, "qc": qc,
                     "ale": ev.get(sku) if ev else d["al"], "alb": bau.get(sku)})

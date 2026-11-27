@@ -273,6 +273,9 @@
   @media (prefers-reduced-motion: reduce) { .warban, .warban * { animation: none !important; } .warban .spark { opacity: 1; } }
   @media (max-width: 700px) { .warban { margin: 0 8px 8px; height: 78px; gap: 6px; } .warban .wsw { width: 70px; height: 50px; }
                               .warban .wtxt b { font-size: 18px; letter-spacing: 2px; } .warban .wtxt span { font-size: 11px; } }
+  a.go { color: inherit; text-decoration: none; display: block; cursor: pointer; }
+  a.go:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .chips a.go { display: inline-block; }
 </style>
 </head>
 <body>
@@ -359,7 +362,7 @@
   <datalist id="skulist"></datalist>
   <label class="qconly">App <select id="fapp"><option value="">All apps</option></select></label>
   <label class="qconly">City <select id="fcity"><option value="">All cities</option></select></label>
-  <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option><option value="~asc">Fewest mismatches</option></select></label>
+  <label class="qconly2">Sort by <select id="fsort"><option value="">Most mismatches</option><option value="~asc">Fewest mismatches</option><option value="~rev">Total revenue (highest first)</option></select></label>
   <label class="culonly"><input type="checkbox" id="fwar"> Only price wars</label>
   <label class="hisonly">Show SKU <select id="fhist"></select></label>
   <button class="clear" id="fclear">Clear</button>
@@ -387,7 +390,7 @@
 <div id="cards"></div>
 <script>
 const DATA = /*__DATA__*/null;
-let VIEW = "all", MODE = "event", SORTCH = "", MASC = false;   // MASC = fewest mismatches first
+let VIEW = "all", MODE = "event", SORTCH = "", MASC = false, REV = false;   // REV = by total revenue   // MASC = fewest mismatches first
 const TOL = (DATA && DATA.tol != null) ? DATA.tol : 1;
 const $ = id => document.getElementById(id);
 const R0 = v => v == null || v === "" ? "" : Math.round(v);
@@ -402,6 +405,7 @@ function stateOf(lo, hi, oos, al) {
 }
 const cellState = (r, c) => stateOf(c[0], c[1], c[2], AL(r));
 const qcState = (r, v) => stateOf(v[0], v[0], v[1], AL(r));
+const go = (u, inner) => u ? '<a class="go" href="' + esc(u) + '" target="_blank" rel="noopener" title="Open the product page">' + inner + "</a>" : inner;
 const cellText = c => !c ? "\u2013" : (c[2] ? "OOS" : (R0(c[0]) === R0(c[1]) ? rs(c[0]) : rs(c[0]) + "\u2013" + R0(c[1])));
 const OFF = s => s === "low" || s === "high";
 const STATE = {low: "Below", high: "Above", oos: "Out of stock", ok: "At par", na: "No Event/BAU price"};
@@ -427,9 +431,9 @@ function logoTh(c, extra) {
 }
 
 function misTh(extra) {
-  return '<th class="sortable msort' + (SORTCH ? "" : " sorted") + '"' + extra +
+  return '<th class="sortable msort' + (SORTCH || REV ? "" : " sorted") + '"' + extra +
          ' title="Click to sort by mismatches (click again: fewest first)">Mismatch<span class="arrow">' +
-         (SORTCH ? "&nbsp;" : MASC ? "\u25B2 fewest" : "\u25BC most") + "</span></th>";
+         (SORTCH || REV ? "&nbsp;" : MASC ? "\u25B2 fewest" : "\u25BC most") + "</span></th>";
 }
 // ---- columns of the current view: [{ch, pin, label}]
 function qcCols() {
@@ -453,6 +457,7 @@ function shown() {
     rows = rows.map(r => Object.assign({}, r, {bad: allBad(r)}));
   }
   const rk = r => r.rank == null ? 99999 : r.rank;
+  if (REV) return rows.sort((a, b) => rk(a) - rk(b) || b.bad - a.bad || a.sku.localeCompare(b.sku));
   if (SORTCH) {
     // clicked channel: SKUs off the aligned price THERE first, then by that channel's own sales rank
     const ch = SORTCH, cols = VIEW === "qc" ? qcCols().filter(c => c.ch === ch) : [];
@@ -476,21 +481,21 @@ function setupFilters() {
   $("fsort").innerHTML += DATA.channels.map(c => '<option value="' + esc(c) + '">' + esc(c) + " \u2013 sales & mismatch</option>").join("");
   $("fwar").onchange = render;
   $("fhist").onchange = () => { $("fsku").value = ""; render(); };
-  $("fsort").onchange = () => { const v = $("fsort").value; MASC = v === "~asc"; SORTCH = v === "~asc" ? "" : v; render(); };
+  $("fsort").onchange = () => { const v = $("fsort").value; MASC = v === "~asc"; REV = v === "~rev"; SORTCH = v.startsWith("~") ? "" : v; render(); };
   $("t").addEventListener("click", e => {
     const mh = e.target.closest("th.msort");
     if (mh) {                                  // Mismatch header: most first <-> fewest first
-      MASC = SORTCH ? false : !MASC; SORTCH = "";
+      MASC = SORTCH || REV ? false : !MASC; SORTCH = ""; REV = false;
       $("fsort").value = MASC ? "~asc" : ""; render(); return;
     }
     const th = e.target.closest("th[data-ch]");
     if (!th) return;
-    SORTCH = SORTCH === th.dataset.ch ? "" : th.dataset.ch; MASC = false;
+    SORTCH = SORTCH === th.dataset.ch ? "" : th.dataset.ch; MASC = false; REV = false;
     $("fsort").value = SORTCH;
     render();
   });
   $("fsku").oninput = render;
-  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity", "fsort"].forEach(id => $(id).value = ""); SORTCH = ""; MASC = false; $("fpri").value = "80"; render(); };
+  $("fclear").onclick = () => { ["fcat", "fsku", "fapp", "fcity", "fsort"].forEach(id => $(id).value = ""); SORTCH = ""; MASC = false; REV = false; $("fpri").value = "80"; render(); };
   document.querySelectorAll(".sg").forEach(b => b.onclick = () => {
     MODE = b.dataset.m;
     document.querySelectorAll(".sg").forEach(x => x.classList.toggle("on", x === b));
@@ -520,7 +525,7 @@ function renderCards(rows) {
     if (VIEW === "all") {
       h += '<div class="chips">';
       DATA.channels.forEach(ch => { const c = r.cells[ch]; if (!c) return;
-        h += '<span class="chip ' + grade(c[0], c[1], c[2], AL(r)) + '" title="' + esc(c[3]) + '">' + logoImg(ch) + cellText(c) + "</span>"; });
+        h += go(c[4], '<span class="chip ' + grade(c[0], c[1], c[2], AL(r)) + '" title="' + esc(c[3]) + '">' + logoImg(ch) + cellText(c) + "</span>"); });
       h += "</div>";
     } else {
       const cols = qcCols();
@@ -529,7 +534,7 @@ function renderCards(rows) {
         if (!cs.length) return;
         h += '<div class="app">' + logoImg(a) + esc(a) + '</div><div class="chips">';
         cs.forEach(c => { const v = r.qc[a][c.pin];
-          h += '<span class="chip ' + grade(v[0], v[0], v[1], AL(r)) + '">' + esc(c.label) + " " + (v[1] ? "OOS" : rs(v[0])) + "</span>"; });
+          h += go(v[2], '<span class="chip ' + grade(v[0], v[0], v[1], AL(r)) + '">' + esc(c.label) + " " + (v[1] ? "OOS" : rs(v[0])) + "</span>"); });
         h += "</div>";
       });
     }
@@ -688,7 +693,7 @@ function render() {
            '</td><td class="al">' + (AL(r) == null ? "\u2013" : rs(AL(r))) + "</td>";
       DATA.channels.forEach(ch => {
         const c = r.cells[ch];
-        h += '<td class="' + (!c ? "none" : grade(c[0], c[1], c[2], AL(r))) + '"' + (c ? ' title="' + esc(c[3] + (c[2] ? "" : gapTxt(c[1] > (AL(r) || 0) ? c[1] : c[0], AL(r)))) + '"' : "") + ">" + cellText(c) + "</td>";
+        h += '<td class="' + (!c ? "none" : grade(c[0], c[1], c[2], AL(r))) + '"' + (c ? ' title="' + esc(c[3] + (c[2] ? "" : gapTxt(c[1] > (AL(r) || 0) ? c[1] : c[0], AL(r))) + (c[4] ? "\nClick to open the product page" : "")) + '"' : "") + ">" + (c ? go(c[4], cellText(c)) : cellText(c)) + "</td>";
       });
       h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
     });
@@ -706,7 +711,7 @@ function render() {
         const v = (r.qc[c.ch] || {})[c.pin];
         const gl = i === 0 || cols[i - 1].ch !== c.ch ? " gl" : "";
         h += '<td class="' + (!v ? "none" : grade(v[0], v[0], v[1], AL(r))) + gl + '" title="' + esc(c.ch + " \u00B7 " + c.label + " " + c.pin + (v && !v[1] ? gapTxt(v[0], AL(r)) : "")) + '">' +
-             (!v ? "\u2013" : v[1] ? "OOS" : rs(v[0])) + "</td>";
+             (!v ? "\u2013" : go(v[2], v[1] ? "OOS" : rs(v[0]))) + "</td>";
       });
       h += '<td class="cnt">' + (r.bad || "") + "</td></tr>";
     });
