@@ -731,6 +731,19 @@ def main():
         return
 
     os.makedirs(LOG_DIR, exist_ok=True)
+    if not a.worker:
+        # only one run at a time (the 40-minute and daily runs can meet) - the browsers share profiles
+        lock = os.path.join(STATE_DIR, "run.lock")
+        os.makedirs(STATE_DIR, exist_ok=True)
+        if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 60 * 60:
+            print("Another Price War run is still going - this one is skipped.")
+            with open(os.path.join(LOG_DIR, "skipped_runs.txt"), "a", encoding="utf-8") as f:
+                f.write(f"{dt.datetime.now():%d-%m-%Y %H:%M}  skipped (--tier {a.tier}) - previous run still going\n")
+            return
+        with open(lock, "w") as f:
+            f.write(str(os.getpid()))
+        import atexit
+        atexit.register(lambda: os.path.exists(lock) and os.remove(lock))
     run_time = dt.datetime.now().replace(second=0, microsecond=0)
     if a.worker:
         PREFIX = f"[{UNIT_NAME.get(a.worker, a.worker)}] "

@@ -5,7 +5,7 @@ if not exist "2_Output\_Logs" mkdir "2_Output\_Logs"
 echo.
 echo  Windows will now run Price War by itself:
 echo    - every day at 07:30          : full check (80%% revenue SKUs + all QC apps)
-echo    - every 2 hours, day and night : Top 50 SKUs + all QC apps
+echo    - every 40 minutes, day and night : Top 50 SKUs + all QC apps
 echo  After every run the dashboard on GitHub updates by itself.
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_engine\schedule.ps1"
