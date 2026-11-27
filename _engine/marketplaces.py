@@ -321,7 +321,8 @@ def _is_main(seller):
 
 
 def parse_offers(html):
-    """-> (title, [{"seller", "price", "ships"}]) from Amazon's All-offers (AOD) panel."""
+    """-> (title, [{"seller", "price", "pinned"}]) from Amazon's All-offers (AOD) panel.
+    pinned = the buy-box offer (what Amazon shows by default)."""
     import re
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html or "", "html.parser")
@@ -340,13 +341,55 @@ def parse_offers(html):
             txt = w.get_text() if w else ""
         m = re.search(r"[\d,]+(?:\.\d+)?", txt)
         price = float(m.group(0).replace(",", "")) if m else None
-        sh = blk.select_one("#aod-offer-shipsFrom .a-col-right")
         if seller and price:
-            out.append({"seller": seller, "price": price, "ships": " ".join(sh.get_text(" ").split()) if sh else ""})
+            out.append({"seller": seller, "price": price, "pinned": blk.get("id") == "aod-pinned-offer"})
     return title, out
 
 
+# same reading, done inside the Amazon page (used when Amazon refuses the direct method)
+JS_OFFERS = r"""
+async ([asins, par]) => {
+  const one = async (a) => {
+    const offers = []; let title = '';
+    for (let pg = 1; pg <= 3; pg++) {
+      try {
+        const r = await fetch('/gp/product/ajax/aodAjaxMain/?asin=' + a + '&pc=dp&experienceId=aodAjaxMain' + (pg > 1 ? '&pageno=' + pg : ''));
+        if (!r.ok) break;
+        const html = await r.text();
+        if (!/aod-offer|aod-pinned-offer/.test(html) && /captcha|characters you see/i.test(html)) return {cap: 1};
+        const d = new DOMParser().parseFromString(html, 'text/html');
+        const t = d.querySelector('#aod-asin-title-text');
+        if (t && !title) title = t.textContent.replace(/\s+/g, ' ').trim();
+        let n = 0;
+        d.querySelectorAll('#aod-pinned-offer, #aod-offer').forEach(b => {
+          const se = b.querySelector('#aod-offer-soldBy a') || b.querySelector('#aod-offer-soldBy .a-col-right .a-size-small')
+                     || b.querySelector('#aod-offer-soldBy .a-col-right');
+          let s = se ? se.textContent.replace(/\s+/g, ' ').trim() : '';
+          s = s.replace(/^Sold by\s*/i, '').split(' Seller rating')[0].trim();
+          const pe = b.querySelector('.a-price:not(.a-text-price) .a-offscreen') || b.querySelector('.a-price .a-offscreen');
+          let tx = pe ? pe.textContent : '';
+          if (!tx.trim()) { const w = b.querySelector('.a-price-whole'); tx = w ? w.textContent : ''; }
+          const m = tx.match(/[\d,]+(?:\.\d+)?/);
+          const p = m ? parseFloat(m[0].replace(/,/g, '')) : null;
+          if (s && p) { offers.push({seller: s, price: p, pinned: b.id === 'aod-pinned-offer'}); n++; }
+        });
+        if (n < 10) break;
+      } catch (e) { break; }
+    }
+    return {offers, title};
+  };
+  const out = new Array(asins.length); let i = 0;
+  const w = async () => { while (i < asins.length) { const k = i++; out[k] = await one(asins[k]); } };
+  await Promise.all(Array.from({length: Math.min(par, asins.length)}, w));
+  return out;
+}
+"""
+
+
 def _amazon(ids, pins, cities, log):
+    """Amazon  : RK World's price. If RK World has no offer on a product -> the default
+                 (buy box) price Amazon shows, so the cell is never blank.
+       Amazon Now: RK World Now's price at each quick-commerce pincode."""
     d = sla_engine_dir()
     if not d:
         raise RuntimeError("SLA Tracker v2 not found next to the tracker (needed for Amazon)")
@@ -356,9 +399,18 @@ def _amazon(ids, pins, cities, log):
     ctx = _SlaCtx(mod, "amazon", log)
     asins = [mod.parse_id(i) or i for i in ids]
     back = dict(zip(asins, ids))
+    pins = list(dict.fromkeys(pins))
     got, titles, lock = {}, {}, threading.Lock()
 
-    class Runner(mod._ApiRunner):
+    def keep(pin, asin, offers, title=""):
+        with lock:
+            if offers or asin not in got.get(pin, {}):
+                got.setdefault(pin, {})[asin] = offers or []
+            if title:
+                titles.setdefault(asin, title)
+
+    # 1) direct method (fast)
+    class Api(mod._ApiRunner):
         def read_one(self, sess, asin, pin):
             offers = []
             try:
@@ -369,12 +421,9 @@ def _amazon(ids, pins, cities, log):
                     if not 200 <= code < 300:
                         break
                     title, part = parse_offers(txt)
-                    if title:
-                        with lock:
-                            titles.setdefault(asin, title)
+                    keep(pin, asin, [], title)
                     offers += part
-                    if len(part) < 10 or (any(_is_main(o["seller"]) for o in offers)
-                                          and any(_is_now(o["seller"]) for o in offers)):
+                    if len(part) < 10:
                         break
                 return {"offers": offers}
             except mod._Blocked:
@@ -384,22 +433,51 @@ def _amazon(ids, pins, cities, log):
                 return {"offers": offers}
 
         def emit_result(self, sess, asin, pin, r):
-            with lock:
-                got.setdefault(pin, {})[asin] = r.get("offers") or []
+            keep(pin, asin, r.get("offers") or [])
 
-    pins = list(dict.fromkeys(pins))
     log(f"=== Amazon + Amazon Now: {len(asins)} product(s) x {len(pins)} pincode(s) - "
-        f"only sellers '{AMAZON_SELLER}' and '{AMAZON_NOW_SELLER}' ===")
-    Runner([(a, p) for p in pins for a in asins], ctx).main()
-    if not got:
-        log("  Amazon: no offers read (Amazon may be blocking - see the log above)")
+        f"sellers '{AMAZON_SELLER}' and '{AMAZON_NOW_SELLER}' ===")
+    try:
+        Api([(a, p) for p in pins for a in asins], ctx).main()
+    except Exception as e:
+        log(f"  Amazon direct method failed: {str(e).splitlines()[0][:150]}")
 
-    def listing(asin, o, seller):
+    # 2) whatever the direct method could not read -> inside a real browser
+    left = [(a, p) for p in pins for a in asins if not (got.get(p) or {}).get(a)]
+    if left:
+        log(f"  Amazon: reading {len(left)} product x pincode check(s) in the browser")
+
+        class Browser(mod._Runner):
+            async def check_pin(self, page, pin, todo):
+                ok = False
+                for _ in range(2):
+                    try:
+                        ok = await self.safe_eval(page, mod.JS_SET_PIN, pin)
+                    except Exception as e:
+                        self.note_error(e)
+                    if ok:
+                        break
+                    await self.open_home(page)
+                if not ok:
+                    return {a: {"offers": []} for a in todo}
+                res = await self.safe_eval(page, JS_OFFERS, [todo, max(2, self.per_session)])
+                return {a: (r or {}) for a, r in zip(todo, res or [])}
+
+            def to_row(self, asin, pin, r):
+                keep(pin, asin, r.get("offers") or [], r.get("title") or "")
+                return {"PID": asin}
+
+        try:
+            mod._drive_browser(Browser(left, ctx, {a: {"name": "-", "brand": "-"} for a in asins}))
+        except Exception as e:
+            log(f"  Amazon browser reading failed: {str(e).splitlines()[0][:150]}")
+
+    def listing(asin, o, seller, note=""):
         return {"id": back.get(asin, asin), "name": titles.get(asin, ""), "brand": "Nat Habit", "size": "",
-                "mrp": None, "sp": o["price"], "in_stock": True, "qty": None, "seller": seller,
+                "mrp": None, "sp": o["price"], "in_stock": True, "qty": None, "seller": seller + note,
                 "url": URL["amazon"].format(asin)}
 
-    main, results, sellers = {}, [], {}
+    main, default, results, sellers = {}, {}, [], {}
     for p in pins:
         now = []
         for asin, offers in (got.get(p) or {}).items():
@@ -408,18 +486,55 @@ def _amazon(ids, pins, cities, log):
             m = [o for o in offers if _is_main(o["seller"])]
             if m and asin not in main:
                 main[asin] = listing(asin, min(m, key=lambda o: o["price"]), AMAZON_SELLER)
+            other = [o for o in offers if not _is_now(o["seller"])]
+            if other and asin not in default:            # buy box first, else the cheapest offer
+                o = next((x for x in other if x.get("pinned")), None) or min(other, key=lambda x: x["price"])
+                default[asin] = listing(asin, o, o["seller"], f" (default - no {AMAZON_SELLER} offer)")
             n = [o for o in offers if _is_now(o["seller"])]
             if n:
                 now.append(listing(asin, min(n, key=lambda o: o["price"]), AMAZON_NOW_SELLER))
         results.append({"channel": "amazonnow", "pin": p, "city": cities.get(p, ""), "listings": now,
-                        "note": "" if p in got else "Amazon did not answer for this pincode", "checked": p in got})
+                        "note": "" if got.get(p) else "Amazon did not answer for this pincode", "checked": bool(got.get(p))})
         log(f"  Amazon Now {p} {cities.get(p, '')}: {len(now)} product(s) sold by {AMAZON_NOW_SELLER}")
-    log(f"  Amazon: {len(main)} of {len(asins)} product(s) sold by {AMAZON_SELLER} "
-        f"({len(asins) - len(main)} without an {AMAZON_SELLER} offer)")
+
+    amz = dict(main)
+    for a, L in default.items():
+        amz.setdefault(a, L)
+    # 3) still nothing for a product -> the old buy-box reader (never leave Amazon blank)
+    rest = [back.get(a, a) for a in asins if a not in amz]
+    if rest:
+        log(f"  Amazon: {len(rest)} product(s) without any offer read - using the default Amazon price reader")
+        try:
+            for L in _sla_amazon_default(mod, rest, pins[0], log) or _price_check("amazon", rest, log, None):
+                L["seller"] = (L.get("seller") or "Amazon default") + f" (default - no {AMAZON_SELLER} offer read)"
+                amz.setdefault(mod.parse_id(L["id"]) or L["id"], L)
+        except Exception as e:
+            log(f"  default Amazon reader failed: {str(e).splitlines()[0][:150]}")
+    log(f"  Amazon: {len(main)} of {len(asins)} product(s) at {AMAZON_SELLER}'s price, "
+        f"{len(amz) - len(main)} at the default price, {len(asins) - len(amz)} not read")
     top = sorted(sellers.items(), key=lambda x: -x[1])[:8]
     if top:
         log("  sellers seen on these products: " + ", ".join(f"{k} ({v})" for k, v in top))
     results.insert(0, {"channel": "amazon", "pin": NATIONAL_PIN, "city": NATIONAL_PIN,
-                       "listings": list(main.values()), "note": "" if main else "no RK World offers read",
-                       "checked": bool(main)})
+                       "listings": list(amz.values()), "note": "" if amz else "no Amazon prices read",
+                       "checked": bool(amz)})
     return results
+
+
+def _sla_amazon_default(mod, ids, pin, log):
+    """The SLA Tracker's normal Amazon reading (buy-box price, direct + browser fallback)."""
+    ctx = _SlaCtx(mod, "amazon", log)
+    jobs = [(mod.parse_id(i) or i, pin) for i in ids]
+    mod.run(jobs, ctx)
+    back = {mod.parse_id(i) or i: i for i in ids}
+    out = []
+    for r in ctx.rows:
+        sp = _f(r.get("Price (Rs)"))
+        if sp is None:
+            continue
+        pid = back.get(str(r.get("PID")), str(r.get("PID")))
+        out.append({"id": pid, "name": r.get("Product Name") or "", "brand": r.get("Brand") or "",
+                    "size": "", "mrp": _f(r.get("MRP (Rs)")), "sp": sp,
+                    "in_stock": r.get("Status") != "Out of stock", "qty": None,
+                    "seller": r.get("Seller") or "", "url": URL["amazon"].format(pid)})
+    return out
