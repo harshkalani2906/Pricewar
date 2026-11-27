@@ -654,6 +654,8 @@ def parse_only(text):
             only |= set(IN.MP_KEYS)
         elif IN.channel_key(s) in IN.NAMES:
             only.add(IN.channel_key(s))
+            if IN.channel_key(s) == "amazonnow":
+                only.add("amazon")                 # Amazon Now is read together with Amazon
         else:
             log(f"  --only: unknown channel '{x}' ignored")
     return only or None
@@ -754,11 +756,12 @@ def main():
 
     only = parse_only(a.only)
     if a.no_marketplaces:
-        only = (only or set(IN.ALL_KEYS)) - set(IN.MP_KEYS)
+        only = (only or set(IN.ALL_KEYS)) - set(IN.MP_KEYS) - set(IN.NOW_KEYS)
     problems = []
     links = IN.read_links(LINKS_FILE, log, problems)
     master = IN.read_master(MASTER_FILE, log, problems)
     jobs, cities = IN.read_pincodes(PIN_FILE, PINMASTER_FILE, log, problems)
+    now_pins = sorted({p for v in jobs.values() for p in v})      # Amazon Now: the quick-commerce pincodes
     if only:
         links = {k: v for k, v in links.items() if k in only}
         jobs = {k: v for k, v in jobs.items() if k in only}
@@ -773,8 +776,15 @@ def main():
             cut += len(ids) - len(links[k])
         log(f"SKU Priority: checking {'Top 50' if a.tier == 'top50' else '80% revenue'} SKUs on marketplaces "
             f"({cut} lower-revenue id(s) skipped this run)")
+    # Amazon Now = the same ASINs as Amazon (unless Links has its own "Amazon Now" rows)
+    if links.get("amazon") and not links.get("amazonnow"):
+        links["amazonnow"] = list(links["amazon"])
+    for (k, cid), m in list(master.items()):
+        if k == "amazon":
+            master.setdefault(("amazonnow", cid), m)
     if a.pins:
         jobs = {k: v[:a.pins] for k, v in jobs.items()}
+        now_pins = now_pins[:a.pins]
     qc_keys = [k for k in IN.QC_KEYS if k in jobs]
     for k in IN.QC_KEYS:
         if links.get(k) and k not in jobs and (only is None or k in only):
@@ -823,10 +833,13 @@ def main():
 
     if mp_keys:
         try:
-            mres = MP.fetch({k: links[k] for k in mp_keys}, log, _log_fh, pin=mp_pin)
+            mres = MP.fetch({k: links[k] for k in mp_keys}, log, _log_fh, pin=mp_pin,
+                            now_pins=now_pins or [mp_pin], cities=cities)
             results += mres
             for r in mres:
-                ch_status[r["channel"]] = {"pins": 1, "ok": 1 if r["listings"] else 0}
+                s = ch_status.setdefault(r["channel"], {"pins": 0, "ok": 0})
+                s["pins"] += 1
+                s["ok"] += 1 if r["listings"] else 0
         except Exception as e:
             log(f"!! Marketplaces stopped: {e}")
             log(traceback.format_exc()[-800:])
@@ -844,7 +857,7 @@ def main():
     trim_history()
     log(f"Saved {os.path.relpath(path, ROOT)}  ({len(rows)} rows)")
     for k, s in ch_status.items():
-        log(f"  {NAMES[k]}: " + (f"data from {s['ok']} of {s['pins']} pincode(s)" if k in CH.BY_KEY
+        log(f"  {NAMES[k]}: " + (f"data from {s['ok']} of {s['pins']} pincode(s)" if (k in CH.BY_KEY or k == "amazonnow")
                                  else ("prices read" if s["ok"] else "NO prices read")))
     if n1 or n2 or n3:
         log(f"Needs Attention: {n1} Links id(s) missing in Product Master, {n2} app item(s) not in Links, "

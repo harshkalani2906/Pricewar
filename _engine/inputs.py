@@ -21,12 +21,13 @@ import re
 
 QC_KEYS = ["blinkit", "zepto", "instamart", "bigbasket", "fkminutes"]
 MP_KEYS = ["amazon", "flipkart", "myntra", "nykaa", "firstcry"]
-ALL_KEYS = QC_KEYS + MP_KEYS
+NOW_KEYS = ["amazonnow"]                 # Amazon Now: same ASINs as Amazon, seller RK World Now, per QC pincode
+ALL_KEYS = QC_KEYS + MP_KEYS + NOW_KEYS
 NAMES = {"blinkit": "Blinkit", "zepto": "Zepto", "instamart": "Instamart", "bigbasket": "BigBasket",
          "fkminutes": "FK Minutes", "amazon": "Amazon", "flipkart": "Flipkart", "myntra": "Myntra",
-         "nykaa": "Nykaa", "firstcry": "FirstCry"}
+         "nykaa": "Nykaa", "firstcry": "FirstCry", "amazonnow": "Amazon Now"}
 
-_ALIAS = {"amz": "amazon", "amazonin": "amazon", "fk": "flipkart", "flipkartminutes": "fkminutes",
+_ALIAS = {"amz": "amazon", "amznow": "amazonnow", "now": "amazonnow", "amazonin": "amazon", "fk": "flipkart", "flipkartminutes": "fkminutes",
           "fkminutes": "fkminutes", "minutes": "fkminutes", "fkm": "fkminutes",
           "swiggy": "instamart", "swiggyinstamart": "instamart", "im": "instamart",
           "bb": "bigbasket", "bbnow": "bigbasket", "bigbasketnow": "bigbasket",
@@ -54,6 +55,7 @@ def channel_key(text) -> str | None:
 # ---------------------------------------------------------------------------
 _PAT = {
     "amazon":    [r"/(?:dp|gp/product|gp/aw/d|product)/([A-Z0-9]{10})", r"^([A-Z0-9]{10})$"],
+    "amazonnow": [r"/(?:dp|gp/product|gp/aw/d|product)/([A-Z0-9]{10})", r"^([A-Z0-9]{10})$"],
     "flipkart":  [r"[?&]pid=([A-Z0-9]{16})", r"^([A-Z0-9]{16})$"],
     "fkminutes": [r"[?&]pid=([A-Z0-9]{16})", r"^([A-Z0-9]{16})$"],
     "myntra":    [r"/(\d{5,10})/buy", r"myntra\.com/(?:.*/)?(\d{5,10})/?(?:\?|$)", r"^(\d{5,10})$"],
@@ -64,7 +66,7 @@ _PAT = {
     "instamart": [r"/item/([A-Za-z0-9]+)", r"^([A-Za-z0-9]{4,})$"],
     "bigbasket": [r"/pd/(\d+)", r"^(\d{3,12})$"],
 }
-_UPPER = {"amazon", "flipkart", "fkminutes", "nykaa", "instamart"}
+_UPPER = {"amazon", "amazonnow", "flipkart", "fkminutes", "nykaa", "instamart"}
 
 
 def clean_id(key: str, value) -> str | None:

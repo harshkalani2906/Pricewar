@@ -52,10 +52,18 @@ class FirstCry(_MP):
     key, name = "firstcry", "FirstCry"
 
 
-ALL = [Amazon, Flipkart, Myntra, Nykaa, FirstCry]
+class AmazonNow:                      # Amazon's quick commerce - read city by city (QC pincodes)
+    key, name, national = "amazonnow", "Amazon Now", False
+
+
+ALL = [Amazon, Flipkart, Myntra, Nykaa, FirstCry, AmazonNow]
+
+# Amazon prices are read ONLY from Nat Habit's own sellers (not the buy box / other sellers):
+AMAZON_SELLER = "RK World"            # Amazon        -> price of this seller
+AMAZON_NOW_SELLER = "RK World Now"    # Amazon Now    -> price of this seller
 NEEDS = {"amazon": ["Price Check", "Amazon"], "flipkart": ["Price Check", "Flipkart"],
          "myntra": ["Price Check", "Myntra"], "nykaa": ["Nykaa"], "firstcry": ["FirstCry"]}
-URL = {"amazon": "https://www.amazon.in/dp/{}", "flipkart": "https://www.flipkart.com/product/p/itme?pid={}",
+URL = {"amazon": "https://www.amazon.in/dp/{}", "amazonnow": "https://www.amazon.in/dp/{}", "flipkart": "https://www.flipkart.com/product/p/itme?pid={}",
        "myntra": "https://www.myntra.com/{}", "nykaa": "https://www.nykaa.com/x/p/{}",
        "firstcry": "https://www.firstcry.com/x/x/{}/product-detail"}
 
@@ -95,7 +103,7 @@ def _f(v):
 
 # Amazon + Flipkart use the SLA Tracker v2 readers (direct API, many requests at once -
 # the fastest versions). Missing ones fall back to the Price Check readers.
-SLA_FIRST = {"amazon", "flipkart"}
+SLA_FIRST = {"flipkart"}
 
 
 def sla_engine_dir():
@@ -161,13 +169,22 @@ def _sla(key, ids, pin, log):
     return out
 
 
-def fetch(links, log, log_fh, pin="110001"):
+def fetch(links, log, log_fh, pin="110001", now_pins=None, cities=None):
     """links = {channel_key: [ids]}  ->  list of results
-    {"channel", "pin", "city", "listings", "note", "checked": True}"""
+    {"channel", "pin", "city", "listings", "note", "checked": True}
+    Amazon also gives Amazon Now (seller RK World Now) at every quick-commerce pincode."""
     _paths()
     results = []
     for key, ids in links.items():
-        if not ids:
+        if not ids or key == "amazonnow":
+            continue
+        if key == "amazon":
+            try:
+                results += _amazon(ids, now_pins or [pin], cities or {}, log)
+            except Exception as e:
+                log(f"  Amazon failed: {str(e).splitlines()[0][:160]}")
+                results.append({"channel": "amazon", "pin": NATIONAL_PIN, "city": NATIONAL_PIN, "listings": [],
+                                "note": f"error: {str(e).splitlines()[0][:160]}", "checked": False})
             continue
         nm = {c.key: c.name for c in ALL}[key]
         log(f"=== {nm}: {len(ids)} product(s) from Links.xlsx, all-India price ===")
@@ -283,3 +300,126 @@ def _firstcry(ids, log, log_fh=None):
                     "qty": r.get("stock_qty") or None, "seller": "",
                     "url": r.get("product_url") or URL["firstcry"].format(pid)})
     return out
+
+
+# ---------------------------------------------------------------------------
+# Amazon + Amazon Now: every seller's offer on the product ("All offers" panel),
+# keep only RK World (Amazon) and RK World Now (Amazon Now).
+# ---------------------------------------------------------------------------
+def _norm(s):
+    import re
+    return re.sub(r"[^a-z]", "", str(s or "").lower())
+
+
+def _is_now(seller):
+    n = _norm(seller)
+    return n == _norm(AMAZON_NOW_SELLER) or (n.startswith(_norm(AMAZON_SELLER)) and "now" in n)
+
+
+def _is_main(seller):
+    return _norm(seller) == _norm(AMAZON_SELLER)
+
+
+def parse_offers(html):
+    """-> (title, [{"seller", "price", "ships"}]) from Amazon's All-offers (AOD) panel."""
+    import re
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html or "", "html.parser")
+    t = soup.select_one("#aod-asin-title-text")
+    title = " ".join(t.get_text(" ").split()) if t else ""
+    out = []
+    for blk in soup.select("#aod-pinned-offer, #aod-offer"):
+        se = (blk.select_one("#aod-offer-soldBy a") or blk.select_one("#aod-offer-soldBy .a-col-right .a-size-small")
+              or blk.select_one("#aod-offer-soldBy .a-col-right"))
+        seller = " ".join(se.get_text(" ").split()) if se else ""
+        seller = re.sub(r"^Sold by\s*", "", seller, flags=re.I).split(" Seller rating")[0].strip()
+        pe = blk.select_one(".a-price:not(.a-text-price) .a-offscreen") or blk.select_one(".a-price .a-offscreen")
+        txt = pe.get_text() if pe else ""
+        if not txt.strip():
+            w = blk.select_one(".a-price-whole")
+            txt = w.get_text() if w else ""
+        m = re.search(r"[\d,]+(?:\.\d+)?", txt)
+        price = float(m.group(0).replace(",", "")) if m else None
+        sh = blk.select_one("#aod-offer-shipsFrom .a-col-right")
+        if seller and price:
+            out.append({"seller": seller, "price": price, "ships": " ".join(sh.get_text(" ").split()) if sh else ""})
+    return title, out
+
+
+def _amazon(ids, pins, cities, log):
+    d = sla_engine_dir()
+    if not d:
+        raise RuntimeError("SLA Tracker v2 not found next to the tracker (needed for Amazon)")
+    spec = importlib.util.spec_from_file_location("sla_amazon", os.path.join(d, "amazon.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    ctx = _SlaCtx(mod, "amazon", log)
+    asins = [mod.parse_id(i) or i for i in ids]
+    back = dict(zip(asins, ids))
+    got, titles, lock = {}, {}, threading.Lock()
+
+    class Runner(mod._ApiRunner):
+        def read_one(self, sess, asin, pin):
+            offers = []
+            try:
+                for page in (1, 2, 3):
+                    code, txt = self.req(sess, "GET", f"/gp/product/ajax/aodAjaxMain/?asin={asin}&pc=dp"
+                                         f"&experienceId=aodAjaxMain" + (f"&pageno={page}" if page > 1 else ""),
+                                         headers={"Referer": f"{mod.BASE}/dp/{asin}"})
+                    if not 200 <= code < 300:
+                        break
+                    title, part = parse_offers(txt)
+                    if title:
+                        with lock:
+                            titles.setdefault(asin, title)
+                    offers += part
+                    if len(part) < 10 or (any(_is_main(o["seller"]) for o in offers)
+                                          and any(_is_now(o["seller"]) for o in offers)):
+                        break
+                return {"offers": offers}
+            except mod._Blocked:
+                return {"cap": 1}
+            except Exception as e:
+                self.note_error(e)
+                return {"offers": offers}
+
+        def emit_result(self, sess, asin, pin, r):
+            with lock:
+                got.setdefault(pin, {})[asin] = r.get("offers") or []
+
+    pins = list(dict.fromkeys(pins))
+    log(f"=== Amazon + Amazon Now: {len(asins)} product(s) x {len(pins)} pincode(s) - "
+        f"only sellers '{AMAZON_SELLER}' and '{AMAZON_NOW_SELLER}' ===")
+    Runner([(a, p) for p in pins for a in asins], ctx).main()
+    if not got:
+        log("  Amazon: no offers read (Amazon may be blocking - see the log above)")
+
+    def listing(asin, o, seller):
+        return {"id": back.get(asin, asin), "name": titles.get(asin, ""), "brand": "Nat Habit", "size": "",
+                "mrp": None, "sp": o["price"], "in_stock": True, "qty": None, "seller": seller,
+                "url": URL["amazon"].format(asin)}
+
+    main, results, sellers = {}, [], {}
+    for p in pins:
+        now = []
+        for asin, offers in (got.get(p) or {}).items():
+            for o in offers:
+                sellers[o["seller"]] = sellers.get(o["seller"], 0) + 1
+            m = [o for o in offers if _is_main(o["seller"])]
+            if m and asin not in main:
+                main[asin] = listing(asin, min(m, key=lambda o: o["price"]), AMAZON_SELLER)
+            n = [o for o in offers if _is_now(o["seller"])]
+            if n:
+                now.append(listing(asin, min(n, key=lambda o: o["price"]), AMAZON_NOW_SELLER))
+        results.append({"channel": "amazonnow", "pin": p, "city": cities.get(p, ""), "listings": now,
+                        "note": "" if p in got else "Amazon did not answer for this pincode", "checked": p in got})
+        log(f"  Amazon Now {p} {cities.get(p, '')}: {len(now)} product(s) sold by {AMAZON_NOW_SELLER}")
+    log(f"  Amazon: {len(main)} of {len(asins)} product(s) sold by {AMAZON_SELLER} "
+        f"({len(asins) - len(main)} without an {AMAZON_SELLER} offer)")
+    top = sorted(sellers.items(), key=lambda x: -x[1])[:8]
+    if top:
+        log("  sellers seen on these products: " + ", ".join(f"{k} ({v})" for k, v in top))
+    results.insert(0, {"channel": "amazon", "pin": NATIONAL_PIN, "city": NATIONAL_PIN,
+                       "listings": list(main.values()), "note": "" if main else "no RK World offers read",
+                       "checked": bool(main)})
+    return results

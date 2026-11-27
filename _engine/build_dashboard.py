@@ -22,10 +22,10 @@ DASH_DIR = os.path.join(ROOT, "3_Dashboard")
 TEMPLATE = os.path.join(HERE, "dashboard_template.html")
 
 CHANNELS = ["Amazon", "Flipkart", "Myntra", "Nykaa", "FirstCry",
-            "Blinkit", "Zepto", "Instamart", "BigBasket", "FK Minutes"]
+            "Amazon Now", "Blinkit", "Zepto", "Instamart", "BigBasket", "FK Minutes"]
 LOGO_DIR = os.path.join(HERE, "logos")
 # channel -> website whose icon is shown in the column header
-LOGO_SITE = {"Amazon": "amazon.in", "Flipkart": "flipkart.com", "Myntra": "myntra.com",
+LOGO_SITE = {"Amazon": "amazon.in", "Amazon Now": "amazon.in", "Flipkart": "flipkart.com", "Myntra": "myntra.com",
              "Nykaa": "nykaa.com", "FirstCry": "firstcry.com", "Blinkit": "blinkit.com",
              "Zepto": "zepto.com", "Instamart": "swiggy.com", "BigBasket": "bigbasket.com",
              "FK Minutes": "flipkart.com"}
@@ -197,7 +197,7 @@ def price_history(rows, cutoff_days=7):
 
 
 # product page of each channel, from the id (used when a reading has no link saved)
-PAGE = {"Amazon": "https://www.amazon.in/dp/{}", "Flipkart": "https://www.flipkart.com/product/p/itme?pid={}",
+PAGE = {"Amazon": "https://www.amazon.in/dp/{}", "Amazon Now": "https://www.amazon.in/dp/{}", "Flipkart": "https://www.flipkart.com/product/p/itme?pid={}",
         "Myntra": "https://www.myntra.com/{}", "Nykaa": "https://www.nykaa.com/x/p/{}",
         "FirstCry": "https://www.firstcry.com/x/x/{}/product-detail", "Blinkit": "https://blinkit.com/prn/x/prid/{}",
         "Zepto": "https://www.zepto.com/pn/x/pvid/{}", "Instamart": "https://www.swiggy.com/instamart/item/{}",
@@ -238,7 +238,7 @@ def build(log=print, aligned_label="", tolerance=1.0):
     for r in rows:
         last[r["Channel"]] = max(last.get(r["Channel"], ""), r["Run Time"])
 
-    QC = ["Blinkit", "Zepto", "Instamart", "BigBasket", "FK Minutes"]
+    QC = ["Amazon Now", "Blinkit", "Zepto", "Instamart", "BigBasket", "FK Minutes"]
     pins = {}
     for r in rows:
         if r["Channel"] in QC and r["Pincode"] and r["Pincode"] != "All India":
