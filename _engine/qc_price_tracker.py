@@ -642,23 +642,85 @@ def write_attention(path, problems, links, master, extra):
     return n1, len(extra), len(problems)
 
 
+SELECTED = None          # channels the user asked for (Amazon + Amazon Now are read together)
+
+
 def parse_only(text):
+    global SELECTED
     only = set()
     for x in text.split(","):
         s = x.strip().lower().replace(" ", "")
         if not s:
             continue
         if s in ("qc", "quickcommerce"):
-            only |= set(IN.QC_KEYS)
+            only |= set(IN.QC_KEYS) | set(IN.NOW_KEYS)
         elif s in ("marketplaces", "marketplace", "mp"):
             only |= set(IN.MP_KEYS)
         elif IN.channel_key(s) in IN.NAMES:
             only.add(IN.channel_key(s))
-            if IN.channel_key(s) == "amazonnow":
-                only.add("amazon")                 # Amazon Now is read together with Amazon
         else:
             log(f"  --only: unknown channel '{x}' ignored")
+    SELECTED = set(only) if only else None
+    if only and (only & {"amazon", "amazonnow"}):
+        only |= {"amazon", "amazonnow"}            # one Amazon read gives both; extra one is dropped later
     return only or None
+
+
+# ---------------------------------------------------------------------------
+# Menu (double-click RUN PRICE TRACKER.bat) - like the SLA tracker
+# ---------------------------------------------------------------------------
+MENU = [("amazon", "Amazon"), ("amazonnow", "Amazon Now"), ("flipkart", "Flipkart"), ("myntra", "Myntra"),
+        ("nykaa", "Nykaa"), ("firstcry", "FirstCry"), ("blinkit", "Blinkit"), ("zepto", "Zepto"),
+        ("instamart", "Instamart"), ("bigbasket", "BigBasket"), ("fkminutes", "FK Minutes")]
+
+
+def menu():
+    """Returns the command-line arguments for the choice, or None to exit."""
+    while True:
+        print("""
+  ==========================================================
+     PRICE WAR  -  Nat Habit prices on every channel
+  ==========================================================
+     1  Run ALL channels
+""")
+        for i, (k, n) in enumerate(MENU, 2):
+            print(f"    {i:>2}  {n}")
+        print("""
+     Q  Only quick commerce (QC apps + Amazon Now)
+     M  Only marketplaces (Amazon, Flipkart, Myntra, Nykaa, FirstCry)
+     T  Test run - 2 pincodes, browser windows visible
+     D  Rebuild and open the dashboard
+     0  Exit
+
+     More than one channel: type the numbers with commas, like 2,3,8
+""")
+        c = input("  Choose: ").strip().lower().replace(" ", "")
+        if c in ("", "0"):
+            return None
+        if c == "d":
+            return ["--dashboard-only"]
+        args = []
+        if c == "t":
+            args = ["--pins", "2", "--show"]
+        elif c == "q":
+            args = ["--only", "qc"]
+        elif c == "m":
+            args = ["--only", "marketplaces"]
+        elif c != "1":
+            keys = []
+            for x in c.split(","):
+                if x.isdigit() and 2 <= int(x) < 2 + len(MENU):
+                    keys.append(MENU[int(x) - 2][0])
+                else:
+                    keys = None
+                    break
+            if not keys:
+                print("\n  Not understood - type a number from the list.")
+                continue
+            args = ["--only", ",".join(keys)]
+        t = input("\n  Which SKUs on the marketplaces?  1 = Top 50   2 = 80% revenue (Enter)   3 = All : ").strip()
+        args += ["--tier", {"1": "top50", "3": "all"}.get(t, "80")]
+        return args
 
 
 UNIT_NAME = dict(IN.NAMES, mp="Marketplaces")
@@ -724,9 +786,22 @@ def main():
     ap.add_argument("--tier", default="80", choices=["top50", "80", "all"],
                     help="marketplace SKUs to check: top50 = Top 50 revenue SKUs, 80 = SKUs making 80%% of revenue "
                          "(default), all = every id in Links (from 1_Input\\SKU Priority.xlsx)")
+    ap.add_argument("--dashboard-only", action="store_true", help="rebuild + open the dashboard")
     ap.add_argument("--worker", default="", help=argparse.SUPPRESS)
     ap.add_argument("--worker-out", default="", help=argparse.SUPPRESS)
-    a = ap.parse_args()
+    argv = sys.argv[1:]
+    if not argv and sys.stdin and sys.stdin.isatty():
+        argv = menu()
+        if argv is None:
+            return
+    a = ap.parse_args(argv)
+    if a.dashboard_only:
+        import build_dashboard as BD
+        BD.build(log=print, tolerance=a.tolerance)
+        p = os.path.join(ROOT, "3_Dashboard", "price-pulse.html")
+        if os.path.exists(p):
+            os.startfile(p) if hasattr(os, "startfile") else print(p)
+        return
 
     if a.login:
         login_window(IN.channel_key(a.login))
@@ -850,6 +925,9 @@ def main():
         log("finished")
         return
 
+    if SELECTED:                                  # e.g. only Amazon Now asked -> drop the Amazon rows
+        results = [r for r in results if r["channel"] in SELECTED]
+        links = {k: (v if k in SELECTED else []) for k, v in links.items()}
     rows, extra = build_rows(results, links, master, prods, run_time, a.tolerance)
     path = write_excel(rows, prods, run_time, aligned_label, ch_status)
     n1, n2, n3 = write_attention(path, problems, links, master, extra)
